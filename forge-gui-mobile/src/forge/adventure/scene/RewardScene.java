@@ -52,7 +52,7 @@ public class RewardScene extends UIScene {
 
     Type type;
     Array<Actor> generated = new Array<>();
-    static public final float CARD_WIDTH =550f ;
+    static public final float CARD_WIDTH = 550f ;
     static public final float CARD_HEIGHT = 400f;
     static public final float CARD_WIDTH_TO_HEIGHT = CARD_WIDTH / CARD_HEIGHT;
 
@@ -133,6 +133,7 @@ public class RewardScene extends UIScene {
         }
         //save RAM
         ImageCache.unloadCardTextures(true);
+        Forge.restrictAdvMenus = false;
         Forge.switchToLast();
     }
     public void reactivateInputs() {

@@ -86,7 +86,7 @@ public class AnimateAi extends SpellAbilityAi {
             }
         }
         // Don't use instant speed animate abilities before AI's COMBAT_BEGIN
-        if (!ph.is(PhaseType.COMBAT_BEGIN) && ph.isPlayerTurn(ai) && !SpellAbilityAi.isSorcerySpeed(sa, ai)
+        if (!ph.is(PhaseType.COMBAT_BEGIN) && ph.isPlayerTurn(ai) && !isSorcerySpeed(sa, ai)
                 && !sa.hasParam("ActivationPhases") && !"Permanent".equals(sa.getParam("Duration"))) {
             return false;
         }
@@ -174,7 +174,7 @@ public class AnimateAi extends SpellAbilityAi {
                     }
                 }
 
-                if (!SpellAbilityAi.isSorcerySpeed(sa, aiPlayer) && !"Permanent".equals(sa.getParam("Duration"))) {
+                if (!isSorcerySpeed(sa, aiPlayer) && !"Permanent".equals(sa.getParam("Duration"))) {
                     if (sa.hasParam("Crew") && c.isCreature()) {
                         // Do not try to crew a vehicle which is already a creature
                         return false;
@@ -378,7 +378,6 @@ public class AnimateAi extends SpellAbilityAi {
         becomeAnimated(copy, card.hasSickness(), sa);
         return copy;
     }
-    
     private static void becomeAnimated(final Card card, final boolean hasOriginalCardSickness, final SpellAbility sa) {
         // duplicating AnimateEffect.resolve
         final Card source = sa.getHostCard();
@@ -485,7 +484,7 @@ public class AnimateAi extends SpellAbilityAi {
         AnimateEffectBase.doAnimate(card, sa, power, toughness, types, removeTypes, finalColors,
                 keywords, removeKeywords, hiddenKeywords,
                 abilities, triggers, replacements, stAbs,
-                timestamp);
+                timestamp, "Permanent");
 
         // check if animate added static Abilities
         CardTraitChanges traits = card.getChangedCardTraits().get(timestamp, 0);

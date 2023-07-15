@@ -561,9 +561,6 @@ public class AbilityUtils {
             }
         } else if (calcX[0].equals("OriginalHost")) {
             val = xCount(ability.getOriginalHost(), calcX[1], ability);
-        } else if (calcX[0].equals("LastStateBattlefield") && ability instanceof SpellAbility) {
-            Card c = ((SpellAbility) ability).getLastStateBattlefield().get(card);
-            val = c == null ? 0 : xCount(c, calcX[1], ability);
         } else if (calcX[0].startsWith("ExiledWith")) {
             val = handlePaid(card.getExiledCards(), calcX[1], card, ability);
 	    } else if (calcX[0].startsWith("Convoked")) {
@@ -1223,18 +1220,7 @@ public class AbilityUtils {
         else if (defined.equals("DefendingPlayer")) {
             players.add(game.getCombat().getDefendingPlayerRelatedTo(card));
         }
-        else if (defined.equals("OpponentsOtherThanDefendingPlayer")) {
-            players.addAll(player.getOpponents());
-            players.remove(game.getCombat().getDefendingPlayerRelatedTo(card));
-        }
         else if (defined.equals("ChosenPlayer")) {
-            final Player p = card.getChosenPlayer();
-            if (p != null) {
-                players.add(p);
-            }
-        }
-        else if (defined.equals("ChosenAndYou")) {
-            players.add(player);
             final Player p = card.getChosenPlayer();
             if (p != null) {
                 players.add(p);
@@ -1450,7 +1436,11 @@ public class AbilityUtils {
 
         // Needed - Equip an untapped creature with Sword of the Paruns then cast Deadshot on it. Should deal 2 more damage.
         game.getAction().checkStaticAbilities(); // this will refresh continuous abilities for players and permanents.
-        game.getTriggerHandler().collectTriggerForWaiting();
+        if (sa.isReplacementAbility()) {
+            game.getTriggerHandler().collectTriggerForWaiting();
+        } else {
+            game.getTriggerHandler().resetActiveTriggers();
+        }
         AbilityUtils.resolveApiAbility(abSub, game);
     }
 
@@ -1590,10 +1580,6 @@ public class AbilityUtils {
                 host.clearRemembered();
             }
             host.addRemembered(sa.getTargets());
-        }
-
-        if (sa.hasParam("ImprintTargets") && sa.usesTargeting()) {
-            host.addImprintedCards(sa.getTargets().getTargetCards());
         }
 
         if (sa.hasParam("RememberCostMana")) {
@@ -2481,17 +2467,6 @@ public class AbilityUtils {
             return doXMath(n, expr, c, ctb);
         }
 
-        //SacrificedThisTurn <type>
-        if (sq[0].startsWith("SacrificedThisTurn")) {
-            List<Card> list = player.getSacrificedThisTurn();
-            if (l[0].contains(" ")) {
-                String[] lparts = l[0].split(" ", 2);
-                String restrictions = TextUtil.fastReplace(l[0], TextUtil.addSuffix(lparts[0]," "), "");
-                list = CardLists.getValidCardsAsList(list, restrictions, player, c, ctb);
-            }
-            return doXMath(list.size(), expr, c, ctb);
-        }
-
         if (sq[0].contains("AbilityYouCtrl")) {
             CardCollection all = CardLists.getValidCards(player.getCardsIn(ZoneType.Battlefield), "Creature", player,
                     c, ctb);
@@ -3368,19 +3343,19 @@ public class AbilityUtils {
 
         final Game game = player.getGame();
 
-        // count valid cards in any specified zone/s
-        if (l[0].startsWith("Valid") && !l[0].contains("Valid ")) {
-            String[] lparts = l[0].split(" ", 2);
-            final List<ZoneType> vZone = ZoneType.listValueOf(lparts[0].split("Valid")[1]);
-            String restrictions = TextUtil.fastReplace(l[0], TextUtil.addSuffix(lparts[0]," "), "");
-            int num = CardLists.getValidCardCount(game.getCardsIn(vZone), restrictions, player, source, ctb);
-            return doXMath(num, m, source, ctb);
-        }
-
         // count valid cards on the battlefield
         if (l[0].startsWith("Valid ")) {
             final String restrictions = l[0].substring(6);
             int num = CardLists.getValidCardCount(game.getCardsIn(ZoneType.Battlefield), restrictions, player, source, ctb);
+            return doXMath(num, m, source, ctb);
+        }
+
+        // count valid cards in any specified zone/s
+        if (l[0].startsWith("Valid")) {
+            String[] lparts = l[0].split(" ", 2);
+            final List<ZoneType> vZone = ZoneType.listValueOf(lparts[0].split("Valid")[1]);
+            String restrictions = TextUtil.fastReplace(l[0], TextUtil.addSuffix(lparts[0]," "), "");
+            int num = CardLists.getValidCardCount(game.getCardsIn(vZone), restrictions, player, source, ctb);
             return doXMath(num, m, source, ctb);
         }
 
@@ -3394,6 +3369,17 @@ public class AbilityUtils {
 
             final List<Card> res = CardUtil.getThisTurnEntered(destination, origin, validFilter, source, ctb, player);
             return doXMath(res.size(), m, source, ctb);
+        }
+
+        //SacrificedThisTurn <type>
+        if (l[0].startsWith("SacrificedThisTurn")) {
+            List<Card> list = player.getSacrificedThisTurn();
+            if (l[0].contains(" ")) {
+                String[] lparts = l[0].split(" ", 2);
+                String restrictions = TextUtil.fastReplace(l[0], TextUtil.addSuffix(lparts[0]," "), "");
+                list = CardLists.getValidCardsAsList(list, restrictions, player, source, ctb);
+            }
+            return doXMath(list.size(), m, source, ctb);
         }
 
         final String[] sq = l[0].split("\\.");

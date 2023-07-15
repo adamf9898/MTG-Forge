@@ -393,11 +393,16 @@ public abstract class SpellAbilityEffect {
     }
 
     public static void addForgetOnMovedTrigger(final Card card, final String zone) {
-        String trig = "Mode$ ChangesZone | ValidCard$ Card.IsRemembered | Origin$ " + zone + " | ExcludedDestinations$ Stack | Destination$ Any | TriggerZones$ Command | Static$ True";
+        String trig = "Mode$ ChangesZone | ValidCard$ Card.IsRemembered | Origin$ " + zone + " | ExcludedDestinations$ Stack,Exile | Destination$ Any | TriggerZones$ Command | Static$ True";
+        String trig2 = "Mode$ Exiled | ValidCard$ Card.IsRemembered | ValidCause$ SpellAbility.!EffectSource | TriggerZones$ Command | Static$ True";
 
         final Trigger parsedTrigger = TriggerHandler.parseTrigger(trig, card, true);
-        parsedTrigger.setOverridingAbility(getForgetSpellAbility(card));
+        final Trigger parsedTrigger2 = TriggerHandler.parseTrigger(trig2, card, true);
+        SpellAbility forget = getForgetSpellAbility(card);
+        parsedTrigger.setOverridingAbility(forget);
+        parsedTrigger2.setOverridingAbility(forget);
         card.addTrigger(parsedTrigger);
+        card.addTrigger(parsedTrigger2);
     }
 
     protected static void addForgetOnCastTrigger(final Card card) {
@@ -621,7 +626,7 @@ public abstract class SpellAbilityEffect {
     protected static boolean addToCombat(Card c, Player controller, SpellAbility sa, String attackingParam, String blockingParam) {
         final Card host = sa.getHostCard();
         final Game game = controller.getGame();
-        if (!game.getPhaseHandler().inCombat()) {
+        if (!c.isCreature() || !game.getPhaseHandler().inCombat()) {
             return false;
         }
         boolean combatChanged = false;

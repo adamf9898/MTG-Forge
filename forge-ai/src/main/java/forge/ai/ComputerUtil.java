@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -824,6 +825,31 @@ public class ComputerUtil {
             if (!SpecialCardAi.DesecrationDemon.considerSacrificingCreature(ai, source)) {
                 return sacrificed; // don't sacrifice unless in special conditions specified by DesecrationDemon AI
             }
+        } else if ("Lethal".equals(source.getParam("AILogic"))) {
+            for (Card c : cardlist) {
+                boolean isLethal = false;
+                for (Player opp : ai.getOpponents()) {
+                    if (opp.canLoseLife() && !opp.cantLoseForZeroOrLessLife() && c.getNetPower() >= opp.getLife()) {
+                        isLethal = true;
+                        break;
+                    }
+                }
+                for (Card creature : ai.getOpponents().getCreaturesInPlay()) {
+                    if (creature.canBeDestroyed() && c.getNetPower() >= creature.getNetToughness()) {
+                        isLethal = true;
+                        break;
+                    }
+                }
+                if (c.hasSVar("SacMe") || isLethal) {
+                    sacrificed.add(c);
+                    if (sacrificed.size() == amount) {
+                        return sacrificed;
+                    }
+                }
+            }
+            if (sacrificed.size() < amount) {
+                System.err.println("Warning: AILogic Lethal could not meaningfully select enough cards for the AF Sacrifice on " + source.getHostCard());
+            }
         } else if (isOptional && source.getActivatingPlayer().isOpponentOf(ai)) {
             if ("Pillar Tombs of Aku".equals(host.getName())) {
                 if (!ai.canLoseLife() || ai.cantLose()) {
@@ -1077,6 +1103,11 @@ public class ComputerUtil {
                     return true;
                 }
             }
+        }
+
+        // cast Blitz in main 1 if the creature attacks
+        if (sa.isBlitz() && ComputerUtilCard.doesSpecifiedCreatureAttackAI(ai, card)) {
+            return true;
         }
 
         // try not to cast Raid creatures in main 1 if an attack is likely
@@ -1504,19 +1535,29 @@ public class ComputerUtil {
         return false;
     }
 
-    public static boolean hasAFogEffect(final Player ai, boolean checkingOther) {
-        final CardCollection all = new CardCollection(ai.getCardsIn(ZoneType.Battlefield));
+    public static boolean hasAFogEffect(final Player defender, final Player ai, boolean checkingOther) {
+        final CardCollection all = new CardCollection(defender.getCardsIn(ZoneType.Battlefield));
 
-        all.addAll(ai.getCardsActivableInExternalZones(true));
+        all.addAll(defender.getCardsActivableInExternalZones(true));
         // TODO check if cards can be viewed instead
         if (!checkingOther) {
-            all.addAll(ai.getCardsIn(ZoneType.Hand));
+            all.addAll(defender.getCardsIn(ZoneType.Hand));
+        }
+
+        Set<Card> revealed = AiCardMemory.getMemorySet(ai, MemorySet.REVEALED_CARDS);
+        if (revealed != null) {
+            for (Card c : revealed) {
+                // if the card moved to a hidden zone depending on the circumstances the AI could not have noticed...?
+                if (c.isInZone(ZoneType.Hand) && c.getOwner() == defender) {
+                    all.add(c);
+                }
+            }
         }
 
         for (final Card c : all) {
             // check if card is at least available to be played
             // further improvements might consider if AI has options to steal the spell by making it playable first
-            if (c.getZone().getPlayer() != null && c.getZone().getPlayer() != ai && c.mayPlay(ai).isEmpty()) {
+            if (c.getZone().getPlayer() != null && c.getZone().getPlayer() != defender && c.mayPlay(defender).isEmpty()) {
                 continue;
             }
             for (final SpellAbility sa : c.getSpellAbilities()) {
@@ -1531,13 +1572,13 @@ public class ComputerUtil {
                     if (!c.getController().isAI()) {
                         continue;
                     }
-                    if (AiCardMemory.isRememberedCard(ai, c, AiCardMemory.MemorySet.MARKED_TO_AVOID_REENTRY)) {
+                    if (AiCardMemory.isRememberedCard(defender, c, AiCardMemory.MemorySet.MARKED_TO_AVOID_REENTRY)) {
                         continue;
                     }
-                    AiCardMemory.rememberCard(ai, c, AiCardMemory.MemorySet.MARKED_TO_AVOID_REENTRY);
+                    AiCardMemory.rememberCard(defender, c, AiCardMemory.MemorySet.MARKED_TO_AVOID_REENTRY);
                 }
 
-                if (!ComputerUtilCost.canPayCost(sa, ai, false)) {
+                if (!ComputerUtilCost.canPayCost(sa, defender, false)) {
                     continue;
                 }
                 return true;
@@ -1679,14 +1720,10 @@ public class ComputerUtil {
                 return threatened;
             }
         } else {
-            objects = topStack.getTargets();
             final List<GameObject> canBeTargeted = new ArrayList<>();
-            for (Object o : objects) {
-                if (o instanceof GameEntity) {
-                    final GameEntity ge = (GameEntity) o;
-                    if (ge.canBeTargetedBy(topStack)) {
-                        canBeTargeted.add(ge);
-                    }
+            for (GameEntity ge : topStack.getTargets().getTargetEntities()) {
+                if (ge.canBeTargetedBy(topStack)) {
+                    canBeTargeted.add(ge);
                 }
             }
             if (canBeTargeted.isEmpty()) {
@@ -2382,6 +2419,18 @@ public class ComputerUtil {
                             chosen = type;
                         }
                     }
+                }
+            } else if ("ProtectionFromType".equals(logic)) {
+                // TODO: protection vs. damage-dealing and milling instants/sorceries in low creature decks and the like?
+                // Maybe non-creature artifacts in certain cases?
+                List<String> choices = ImmutableList.of("Creature", "Planeswalker"); // types that make sense to get protected against
+                CardCollection evalList = new CardCollection();
+
+                evalList.addAll(ai.getOpponents().getCardsIn(ZoneType.Battlefield));
+
+                chosen = ComputerUtilCard.getMostProminentCardType(evalList, choices);
+                if (StringUtils.isEmpty(chosen)) {
+                    chosen = "Creature"; // if in doubt, choose Creature, I guess
                 }
             }
             else {
