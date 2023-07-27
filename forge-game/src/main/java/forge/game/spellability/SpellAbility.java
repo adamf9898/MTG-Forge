@@ -39,7 +39,6 @@ import forge.game.GameEntityCounterTable;
 import forge.game.GameObject;
 import forge.game.IHasSVars;
 import forge.game.IIdentifiable;
-import forge.game.ability.AbilityFactory;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
@@ -66,11 +65,9 @@ import forge.game.staticability.StaticAbilityCastWithFlash;
 import forge.game.staticability.StaticAbilityMustTarget;
 import forge.game.trigger.Trigger;
 import forge.game.trigger.TriggerType;
-import forge.game.trigger.WrappedAbility;
 import forge.game.zone.ZoneType;
 import forge.util.Aggregates;
 import forge.util.CardTranslation;
-import forge.util.Expressions;
 import forge.util.Lang;
 import forge.util.Localizer;
 import forge.util.TextUtil;
@@ -186,6 +183,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     private CardDamageMap preventMap;
     private GameEntityCounterTable counterTable;
     private CardZoneTable changeZoneTable;
+    private Map<Player, Integer> loseLifeMap;
 
     public CardCollection getLastStateBattlefield() {
         return lastStateBattlefield;
@@ -1151,11 +1149,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
                 clone.changeZoneTable = new CardZoneTable(changeZoneTable);
             }
 
-            clone.payingMana = Lists.newArrayList();
-            // mana is not copied
-            if (lki) {
-                clone.payingMana.addAll(payingMana);
-            }
+            clone.payingMana = Lists.newArrayList(payingMana);
             clone.paidAbilities = Lists.newArrayList();
             clone.setPaidHash(getPaidHash());
 
@@ -1843,14 +1837,14 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
      */
     public CardCollectionView findTargetedCards() {
         // First search for targeted cards associated with current ability
-        if (targetChosen.isTargetingAnyCard()) {
-            return targetChosen.getTargetCards();
+        if (getTargets().isTargetingAnyCard()) {
+            return getTargets().getTargetCards();
         }
 
         // Next search for source cards of targeted SAs associated with current ability
-        if (targetChosen.isTargetingAnySpell()) {
+        if (getTargets().isTargetingAnySpell()) {
             CardCollection res = new CardCollection();
-            for (final SpellAbility ability : targetChosen.getTargetSpells()) {
+            for (final SpellAbility ability : getTargets().getTargetSpells()) {
                 res.add(ability.getHostCard());
             }
             return res;
@@ -1872,16 +1866,13 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public SpellAbility getSATargetingCard() {
-        return targetChosen.isTargetingAnyCard() ? this : getParentTargetingCard();
+        return getTargets().isTargetingAnyCard() ? this : getParentTargetingCard();
     }
 
     public SpellAbility getParentTargetingCard() {
         SpellAbility parent = getParent();
-        if (parent instanceof WrappedAbility) {
-            parent = ((WrappedAbility) parent).getWrappedAbility();
-        }
         while (parent != null) {
-            if (parent.targetChosen.isTargetingAnyCard()) {
+            if (parent.getTargets().isTargetingAnyCard()) {
                 return parent;
             }
             parent = parent.getParent();
@@ -1890,13 +1881,13 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public SpellAbility getSATargetingSA() {
-        return targetChosen.isTargetingAnySpell() ? this : getParentTargetingSA();
+        return getTargets().isTargetingAnySpell() ? this : getParentTargetingSA();
     }
 
     public SpellAbility getParentTargetingSA() {
         SpellAbility parent = getParent();
         while (parent != null) {
-            if (parent.targetChosen.isTargetingAnySpell())
+            if (parent.getTargets().isTargetingAnySpell())
                 return parent;
             parent = parent.getParent();
         }
@@ -1904,7 +1895,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public SpellAbility getSATargetingPlayer() {
-        return targetChosen.isTargetingAnyPlayer() ? this : getParentTargetingPlayer();
+        return getTargets().isTargetingAnyPlayer() ? this : getParentTargetingPlayer();
     }
 
     public SpellAbility getParentTargetingPlayer() {
@@ -2162,19 +2153,6 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         return false;
     }
 
-    public void checkActivationResolveSubs() {
-        if (hasParam("ActivationNumberSacrifice")) {
-            String comp = getParam("ActivationNumberSacrifice");
-            int right = Integer.parseInt(comp.substring(2));
-            int activationNum =  getActivationsThisTurn();
-            if (Expressions.compare(activationNum, comp, right)) {
-                SpellAbility deltrig = AbilityFactory.getAbility(hostCard.getSVar(getParam("ActivationResolveSub")), hostCard);
-                deltrig.setActivatingPlayer(activatingPlayer);
-                AbilityUtils.resolve(deltrig);
-            }
-        }
-    }
-
     public int getTotalManaSpent() {
         return this.getPayingMana().size();
     }
@@ -2357,6 +2335,15 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         return null;
     }
 
+    public Map<Player, Integer> getLoseLifeMap() {
+        if (loseLifeMap != null) {
+            return loseLifeMap;
+        } else if (getParent() != null) {
+            return getParent().getLoseLifeMap();
+        }
+        return null;
+    }
+
     public void setDamageMap(final CardDamageMap map) {
         damageMap = map;
     }
@@ -2369,9 +2356,12 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     public void setChangeZoneTable(final CardZoneTable table) {
         changeZoneTable = table;
     }
+    public void setLoseLifeMap(final Map<Player, Integer> map) {
+        loseLifeMap = map;
+    }
 
     public SpellAbility getOriginalAbility() {
-        return grantorOriginal;
+        return grantorOriginal == null ? null : ObjectUtils.firstNonNull(grantorOriginal.getOriginalAbility(), grantorOriginal);
     }
     public void setOriginalAbility(final SpellAbility sa) {
         grantorOriginal = sa;

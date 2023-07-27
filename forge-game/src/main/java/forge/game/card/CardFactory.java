@@ -186,7 +186,6 @@ public class CardFactory {
             copySA = getCopiedTriggeredAbility((WrappedAbility)targetSA, c, controller);
         } else {
             copySA = targetSA.copy(c, controller, false);
-            c.setCastSA(copySA);
             // need to copy keyword
             if (targetSA.getKeyword() != null) {
                 KeywordInterface kw = targetSA.getKeyword().copy(c, false);
@@ -206,13 +205,15 @@ public class CardFactory {
         if (copySA instanceof Spell) {
             Spell spell = (Spell) copySA;
             spell.setCastFaceDown(false);
+            c.setCastSA(copySA);
         }
 
+        // mana is not copied
+        copySA.clearManaPaid();
         //remove all costs
         if (!copySA.isTrigger()) {
             copySA.setPayCosts(new Cost("", targetSA.isAbility()));
         }
-        copySA.setActivatingPlayer(controller);
 
         return copySA;
     }
@@ -680,7 +681,7 @@ public class CardFactory {
         List<String> creatureTypes = null;
         final CardCloneStates result = new CardCloneStates(in, sa);
 
-        final String newName = sa.getParamOrDefault("NewName", null);
+        final String newName = sa.getParam("NewName");
         ColorSet colors = null;
 
         if (sa.hasParam("AddTypes")) {
@@ -798,7 +799,7 @@ public class CardFactory {
             }
 
             if (sa.hasParam("RemoveCardTypes")) {
-                state.removeCardTypes();
+                state.removeCardTypes(sa.hasParam("RemoveSubTypes"));
             }
 
             state.addType(types);
