@@ -594,15 +594,6 @@ public class PlayerControllerAi extends PlayerController {
     }
 
     @Override
-    public CardCollectionView getCardsToMulligan(Player firstPlayer)  {
-        if (!ComputerUtil.wantMulligan(player, 0)) {
-            return null;
-        }
-
-        return player.getCardsIn(ZoneType.Hand);
-    }
-
-    @Override
     public CardCollectionView londonMulliganReturnCards(final Player mulliganingPlayer, int cardsToReturn) {
         // TODO This is better than it was before, but still suboptimal (but fast).
         // Maybe score a bunch of hands based on projected hand size and return the "duds"
@@ -830,12 +821,6 @@ public class PlayerControllerAi extends PlayerController {
     }
 
     @Override
-    public Card chooseProtectionShield(GameEntity entityBeingDamaged, List<String> options, Map<String, Card> choiceMap) {
-        int i = MyRandom.getRandom().nextInt(options.size());
-        return choiceMap.get(options.get(i));
-    }
-
-    @Override
     public List<AbilitySub> chooseModeForAbility(SpellAbility sa, List<AbilitySub> possible, int min, int num, boolean allowRepeat) {
         List<AbilitySub> result = brains.chooseModeForAbility(sa, possible, min, num, allowRepeat);
         if (result != null) {
@@ -1001,7 +986,7 @@ public class PlayerControllerAi extends PlayerController {
         SpellAbility hostsa = null;     //for Protect sub-ability
         if (getGame().stack.size() > 1) {
             for (SpellAbilityStackInstance si : getGame().getStack()) {
-                SpellAbility spell = si.getSpellAbility(true);
+                SpellAbility spell = si.getSpellAbility();
                 if (sa != spell && sa.getHostCard() != spell.getHostCard()) {
                     String s = ProtectAi.toProtectFrom(spell.getHostCard(), sa);
                     if (s != null) {
@@ -1068,6 +1053,7 @@ public class PlayerControllerAi extends PlayerController {
         emptyAbility.setSVars(sa.getSVars());
         emptyAbility.setCardState(sa.getCardState());
         emptyAbility.setXManaCostPaid(sa.getRootAbility().getXManaCostPaid());
+
         if (ComputerUtilCost.willPayUnlessCost(sa, player, cost, alreadyPaid, allPayers)) {
             boolean result = ComputerUtil.playNoStack(player, emptyAbility, getGame(), true); // AI needs something to resolve to pay that cost
             if (!emptyAbility.getPaidHash().isEmpty()) {
@@ -1305,6 +1291,8 @@ public class PlayerControllerAi extends PlayerController {
                 name = ComputerUtilCard.getMostProminentCardName(cards);
             } else if (logic.equals("CursedScroll")) {
                 name = SpecialCardAi.CursedScroll.chooseCard(player, sa);
+            } else if (logic.equals("PithingNeedle")) {
+                name = SpecialCardAi.PithingNeedle.chooseCard(player, sa);
             }
 
             if (!StringUtils.isBlank(name)) {

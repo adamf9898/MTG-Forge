@@ -1497,7 +1497,7 @@ public class ComputerUtil {
             }
         }
 
-        all.addAll(ai.getCardsActivableInExternalZones(true));
+        all.addAll(ai.getCardsActivatableInExternalZones(true));
         all.addAll(ai.getCardsIn(ZoneType.Hand));
 
         for (final Card c : all) {
@@ -1538,7 +1538,7 @@ public class ComputerUtil {
     public static boolean hasAFogEffect(final Player defender, final Player ai, boolean checkingOther) {
         final CardCollection all = new CardCollection(defender.getCardsIn(ZoneType.Battlefield));
 
-        all.addAll(defender.getCardsActivableInExternalZones(true));
+        all.addAll(defender.getCardsActivatableInExternalZones(true));
         // TODO check if cards can be viewed instead
         if (!checkingOther) {
             all.addAll(defender.getCardsIn(ZoneType.Hand));
@@ -1590,7 +1590,7 @@ public class ComputerUtil {
     public static int possibleNonCombatDamage(final Player ai, final Player enemy) {
         int damage = 0;
         final CardCollection all = new CardCollection(ai.getCardsIn(ZoneType.Battlefield));
-        all.addAll(ai.getCardsActivableInExternalZones(true));
+        all.addAll(ai.getCardsActivatableInExternalZones(true));
         all.addAll(CardLists.filter(ai.getCardsIn(ZoneType.Hand), Predicates.not(Presets.PERMANENTS)));
 
         for (final Card c : all) {
@@ -1671,7 +1671,7 @@ public class ComputerUtil {
         for (SpellAbilityStackInstance si : game.getStack()) {
             // iterate from top of stack to find SpellAbility, including sub-abilities,
             // that does not match "sa"
-            SpellAbility spell = si.getSpellAbility(true), sub = spell.getSubAbility();
+            SpellAbility spell = si.getSpellAbility(), sub = spell.getSubAbility();
             if (spell.isWrapper()) {
                 spell = ((WrappedAbility) spell).getWrappedAbility();
             }
@@ -1767,18 +1767,11 @@ public class ComputerUtil {
         // Lethal Damage => prevent damage/regeneration/bounce/shroud
         if (threatApi == ApiType.DealDamage || threatApi == ApiType.DamageAll) {
             // If PredictDamage is >= Lethal Damage
-            final int dmg = AbilityUtils.calculateAmount(source,
-                    topStack.getParam("NumDmg"), topStack);
+            final int dmg = AbilityUtils.calculateAmount(source, topStack.getParam("NumDmg"), topStack);
             final SpellAbility sub = topStack.getSubAbility();
             boolean noRegen = false;
-            if (sub != null && sub.getApi() == ApiType.Pump) {
-                final List<String> keywords = sub.hasParam("KW") ? Arrays.asList(sub.getParam("KW").split(" & ")) : new ArrayList<>();
-                for (String kw : keywords) {
-                    if (kw.contains("can't be regenerated")) {
-                        noRegen = true;
-                        break;
-                    }
-                }
+            if (sub != null && sub.getApi() == ApiType.Effect && sub.hasParam("AILogic") && sub.getParam("AILogic").equals("CantRegenerate")) {
+                noRegen = true;
             }
             for (final Object o : objects) {
                 if (o instanceof Card) {
@@ -2043,7 +2036,7 @@ public class ComputerUtil {
             // See if permission is on stack and ignore this check if there is and the relevant AI flag is set
             // TODO: improve this so that this flag is not needed and the AI can properly evaluate spells in presence of counterspells.
             for (SpellAbilityStackInstance si : game.getStack()) {
-                SpellAbility sa = si.getSpellAbility(false);
+                SpellAbility sa = si.getSpellAbility();
                 if (sa.getApi() == ApiType.Counter) {
                     noStackCheck = true;
                     break;
@@ -3007,11 +3000,11 @@ public class ComputerUtil {
                 repParams,
                 ReplacementLayer.Other);
 
-        if (Iterables.any(list, CardTraitPredicates.hasParam("AiLogic", "NoLife"))) {
+        if (Iterables.any(list, CardTraitPredicates.hasParam("AILogic", "NoLife"))) {
             return false;
-        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AiLogic", "LoseLife"))) {
+        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AILogic", "LoseLife"))) {
             return false;
-        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AiLogic", "LichDraw"))) {
+        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AILogic", "LichDraw"))) {
             return false;
         }
         return true;
@@ -3036,13 +3029,13 @@ public class ComputerUtil {
             ReplacementLayer.Other
         );
 
-        if (Iterables.any(list, CardTraitPredicates.hasParam("AiLogic", "NoLife"))) {
+        if (Iterables.any(list, CardTraitPredicates.hasParam("AILogic", "NoLife"))) {
             // no life gain is not negative
             return false;
-        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AiLogic", "LoseLife"))) {
+        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AILogic", "LoseLife"))) {
             // lose life is only negative is the player can lose life
             return player.canLoseLife();
-        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AiLogic", "LichDraw"))) {
+        } else if (Iterables.any(list, CardTraitPredicates.hasParam("AILogic", "LichDraw"))) {
             // if it would draw more cards than player has, then its negative
             return player.getCardsIn(ZoneType.Library).size() <= n;
         }

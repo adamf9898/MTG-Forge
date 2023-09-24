@@ -99,11 +99,6 @@ public class DigUntilEffect extends SpellAbilityEffect {
         final Card host = sa.getHostCard();
         final Game game = host.getGame();
 
-        String[] type = new String[]{"Card"};
-        if (sa.hasParam("Valid")) {
-            type = sa.getParam("Valid").split(",");
-        }
-
         int untilAmount = 1;
         if (sa.hasParam("Amount")) {
             untilAmount = AbilityUtils.calculateAmount(host, sa.getParam("Amount"), sa);
@@ -115,10 +110,16 @@ public class DigUntilEffect extends SpellAbilityEffect {
             maxRevealed = AbilityUtils.calculateAmount(host, sa.getParam("MaxRevealed"), sa);
         }
 
+        String[] type = new String[]{"Card"};
+        if (sa.hasParam("Valid")) {
+            type = sa.getParam("Valid").split(",");
+        }
+
         final boolean remember = sa.hasParam("RememberFound");
         final boolean imprint = sa.hasParam("ImprintFound");
 
-        final ZoneType foundDest = ZoneType.smartValueOf(sa.getParam("FoundDestination"));
+        ZoneType foundDest = ZoneType.smartValueOf(sa.getParam("FoundDestination"));
+        final ZoneType optionalNoDestination = ZoneType.smartValueOf(sa.getParamOrDefault("OptionalNoDestination", "None"));
         final int foundLibPos = AbilityUtils.calculateAmount(host, sa.getParam("FoundLibraryPosition"), sa);
         final ZoneType revealedDest = ZoneType.smartValueOf(sa.getParam("RevealedDestination"));
         final int revealedLibPos = AbilityUtils.calculateAmount(host, sa.getParam("RevealedLibraryPosition"), sa);
@@ -128,6 +129,7 @@ public class DigUntilEffect extends SpellAbilityEffect {
         boolean shuffle = sa.hasParam("Shuffle");
         final boolean optional = sa.hasParam("Optional");
         final boolean optionalFound = sa.hasParam("OptionalFoundMove");
+        boolean sequential = digSite == ZoneType.Library && revealedDest != null && revealedDest.equals(foundDest);
 
         CardZoneTable table = new CardZoneTable();
         boolean combatChanged = false;
@@ -179,24 +181,36 @@ public class DigUntilEffect extends SpellAbilityEffect {
             }
 
             if (foundDest != null) {
-                // Allow ordering of found cards
-                if (foundDest.isKnown() && found.size() >= 2 && !foundDest.equals(ZoneType.Exile)) {
-                    found = (CardCollection)p.getController().orderMoveToZoneList(found, foundDest, sa);
+                // is it "change zone until" or "reveal until"?
+                final Iterator<Card> itr;
+                if (sequential) {
+                    itr = revealed.iterator();
+                } else {
+                    itr = found.iterator();
                 }
 
-                final Iterator<Card> itr = found.iterator();
                 while (itr.hasNext()) {
                     final Card c = itr.next();
+
                     final ZoneType origin = c.getZone().getZoneType();
-                    if (optionalFound && !p.getController().confirmAction(sa, null,
-                            Localizer.getInstance().getMessage("lblDoYouWantPutCardToZone", foundDest.getTranslatedName()), null)) {
-                        continue;
+                    if (optionalFound) {
+                        boolean result = p.getController().confirmAction(sa, null, Localizer.getInstance().getMessage("lblDoYouWantPutCardToZone", foundDest.getTranslatedName()), null);
+                        if (!result) {
+                            if (ZoneType.None.equals(optionalNoDestination)) {
+                                itr.remove();
+                                continue;
+                            } else {
+                                foundDest = optionalNoDestination;;
+                            }
+                        }
                     }
+
                     Map<AbilityKey, Object> moveParams = AbilityKey.newMap();
                     moveParams.put(AbilityKey.LastStateBattlefield, lastStateBattlefield);
                     moveParams.put(AbilityKey.LastStateGraveyard, lastStateGraveyard);
                     Card m = null;
                     if (foundDest.equals(ZoneType.Battlefield)) {
+                        moveParams.put(AbilityKey.SimultaneousETB, new CardCollection(c));
                         if (sa.hasParam("GainControl")) {
                             c.setController(sa.getActivatingPlayer(), game.getNextTimestamp());
                         }
@@ -207,16 +221,19 @@ public class DigUntilEffect extends SpellAbilityEffect {
                         if (addToCombat(c, c.getController(), sa, "Attacking", "Blocking")) {
                             combatChanged = true;
                         }
-                    } else if (sa.hasParam("NoMoveFound") && foundDest.equals(ZoneType.Library)) {
+                    } else if (sa.hasParam("NoMoveFound")) {
                         //Don't do anything
                     } else {
                         m = game.getAction().moveTo(foundDest, c, foundLibPos, sa, moveParams);
                     }
-                    revealed.remove(c);
+
                     if (m != null && !origin.equals(m.getZone().getZoneType())) {
-                        table.put(origin, m.getZone().getZoneType(), m);
+                        CardZoneTable trigList = new CardZoneTable();
+                        trigList.put(origin, m.getZone().getZoneType(), m);
+                        trigList.triggerChangesZoneAll(game, sa);
                     }
                 }
+                revealed.removeAll(found);
             }
 
             if (sa.hasParam("RememberRevealed")) {
@@ -225,46 +242,35 @@ public class DigUntilEffect extends SpellAbilityEffect {
             if (sa.hasParam("ImprintRevealed")) {
                 host.addImprintedCards(revealed);
             }
+
             if (sa.hasParam("RevealRandomOrder")) {
                 Collections.shuffle(revealed, MyRandom.getRandom());
             }
 
-            if (sa.hasParam("NoMoveRevealed")) {
+            if (sa.hasParam("NoMoveRevealed") || sequential) {
                 //don't do anything
-            } else if (sa.hasParam("NoneFoundDestination") && found.size() < untilAmount) {
-                // Allow ordering the revealed cards
-                if (noneFoundDest.isKnown() && revealed.size() >= 2) {
-                    revealed = (CardCollection)p.getController().orderMoveToZoneList(revealed, noneFoundDest, sa);
-                }
-                if (noneFoundDest == ZoneType.Library && !shuffle
-                        && !sa.hasParam("RevealRandomOrder") && revealed.size() >= 2) {
-                    revealed = (CardCollection)p.getController().orderMoveToZoneList(revealed, noneFoundDest, sa);
-                }
-
-                final Iterator<Card> itr = revealed.iterator();
-                while (itr.hasNext()) {
-                    final Card c = itr.next();
-                    final ZoneType origin = c.getZone().getZoneType();
-                    final Card m = game.getAction().moveTo(noneFoundDest, c, noneFoundLibPos, sa);
-                    if (m != null && !origin.equals(m.getZone().getZoneType())) {
-                        table.put(origin, m.getZone().getZoneType(), m);
-                    }
-                }
             } else {
-                // Allow ordering the rest of the revealed cards
-                if (revealedDest.isKnown() && revealed.size() >= 2 && !sa.hasParam("SkipReorder")) {
-                    revealed = (CardCollection)p.getController().orderMoveToZoneList(revealed, revealedDest, sa);
+                ZoneType finalDest = revealedDest;
+                int finalPos = revealedLibPos;
+                if (sa.hasParam("NoneFoundDestination") && found.size() < untilAmount) {
+                    finalDest = noneFoundDest;
+                    finalPos = noneFoundLibPos;
                 }
-                if (revealedDest == ZoneType.Library && !shuffle
+
+                // Allow ordering the rest of the revealed cards
+                if (finalDest.isKnown() && revealed.size() >= 2) {
+                    revealed = (CardCollection)p.getController().orderMoveToZoneList(revealed, finalDest, sa);
+                }
+                if (finalDest == ZoneType.Library && !shuffle
                         && !sa.hasParam("RevealRandomOrder") && revealed.size() >= 2) {
-                    revealed = (CardCollection)p.getController().orderMoveToZoneList(revealed, revealedDest, sa);
+                    revealed = (CardCollection)p.getController().orderMoveToZoneList(revealed, finalDest, sa);
                 }
 
                 final Iterator<Card> itr = revealed.iterator();
                 while (itr.hasNext()) {
                     final Card c = itr.next();
                     final ZoneType origin = c.getZone().getZoneType();
-                    final Card m = game.getAction().moveTo(revealedDest, c, revealedLibPos, sa);
+                    final Card m = game.getAction().moveTo(finalDest, c, finalPos, sa);
                     if (m != null && !origin.equals(m.getZone().getZoneType())) {
                         table.put(origin, m.getZone().getZoneType(), m);
                     }

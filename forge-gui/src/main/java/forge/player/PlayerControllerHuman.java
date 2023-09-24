@@ -284,6 +284,13 @@ public class PlayerControllerHuman extends PlayerController implements IGameCont
                     break;
                 }
             }
+            for (SpellAbility sa : hostCard.getAllSpellAbilities()) {
+                if (sa.hasParam("Activator")
+                        && player.isValid(sa.getParam("Activator"), hostCard.getController(), hostCard, sa)) {
+                    noPermission = false;
+                    break;
+                }
+            }
             if (noPermission) {
                 return null;
             }
@@ -1454,14 +1461,6 @@ public class PlayerControllerHuman extends PlayerController implements IGameCont
     }
 
     @Override
-    public CardCollectionView getCardsToMulligan(final Player firstPlayer) {
-        // Partial Paris is gone, so it being commander doesn't really matter anymore...
-        final InputConfirmMulligan inp = new InputConfirmMulligan(this, player, firstPlayer);
-        inp.showAndWait();
-        return inp.isKeepHand() ? null : player.getCardsIn(ZoneType.Hand);
-    }
-
-    @Override
     public void declareAttackers(final Player attackingPlayer, final Combat combat) {
         if (mayAutoPass()) {
             if (CombatUtil.validateAttackers(combat)) {
@@ -1675,13 +1674,6 @@ public class PlayerControllerHuman extends PlayerController implements IGameCont
             Collections.reverse(sortedResults);
         }
         return getGui().one(sa.getHostCard().getName() + " - " + localizer.getMessage("lblChooseAResult"), sortedResults).equals(labelsSrc[0]);
-    }
-
-    @Override
-    public Card chooseProtectionShield(final GameEntity entityBeingDamaged, final List<String> options,
-                                       final Map<String, Card> choiceMap) {
-        final String title = entityBeingDamaged + " - " + localizer.getMessage("lblSelectPreventionShieldToUse");
-        return choiceMap.get(getGui().one(title, options));
     }
 
     @Override
@@ -2621,7 +2613,7 @@ public class PlayerControllerHuman extends PlayerController implements IGameCont
                 inp.showAndWait();
                 if (!inp.hasCancelled()) {
                     for (final Card c : inp.getSelected()) {
-                        c.tap(true);
+                        c.tap(true, null, null);
                     }
                 }
             });

@@ -193,6 +193,8 @@ public class ForgeScript {
         } else if (property.equals("hasTapCost")) {
             Cost cost = sa.getPayCosts();
             return cost != null && cost.hasTapCost();
+        } else if (property.equals("Bargain")) {
+            return sa.isBargain();
         } else if (property.equals("Backup")) {
             return sa.isBackup();
         } else if (property.equals("Blitz")) {
@@ -323,7 +325,7 @@ public class ForgeScript {
             } else {
                 y = sa.getPayCosts().getTotalMana().getCMC();
             }
-            int x = AbilityUtils.calculateAmount(spellAbility.getHostCard(), property.substring(5), spellAbility);
+            int x = AbilityUtils.calculateAmount(source, property.substring(5), spellAbility);
             if (!Expressions.compare(y, property, x)) {
                 return false;
             }

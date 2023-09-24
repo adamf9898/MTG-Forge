@@ -13,6 +13,7 @@ import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
+import forge.game.card.CardFactoryUtil;
 import forge.game.card.CardLists;
 import forge.game.card.CardPredicates;
 import forge.game.card.CardUtil;
@@ -106,8 +107,6 @@ public class ChangeZoneAllEffect extends SpellAbilityEffect {
             }
         }
 
-        cards = (CardCollection)AbilityUtils.filterListByType(cards, sa.getParam("ChangeType"), sa);
-
         if (sa.hasParam("Optional")) {
             final String targets = Lang.joinHomogenous(cards);
             final String message;
@@ -120,6 +119,12 @@ public class ChangeZoneAllEffect extends SpellAbilityEffect {
             if (!sa.getActivatingPlayer().getController().confirmAction(sa, null, message, null)) {
                 return;
             }
+        }
+
+        cards = (CardCollection)AbilityUtils.filterListByType(cards, sa.getParam("ChangeType"), sa);
+
+        if (sa.hasParam("TypeLimit")) {
+            cards = new CardCollection(Iterables.limit(cards, AbilityUtils.calculateAmount(source, sa.getParam("TypeLimit"), sa)));
         }
 
         if (sa.hasParam("ForgetOtherRemembered")) {
@@ -170,6 +175,7 @@ public class ChangeZoneAllEffect extends SpellAbilityEffect {
             moveParams.put(AbilityKey.LastStateGraveyard, lastStateGraveyard);
 
             if (destination == ZoneType.Battlefield) {
+                moveParams.put(AbilityKey.SimultaneousETB, cards);
                 if (sa.hasAdditionalAbility("AnimateSubAbility")) {
                     // need LKI before Animate does apply
                     moveParams.put(AbilityKey.CardLKI, CardUtil.getLKICopy(c));
@@ -182,6 +188,10 @@ public class ChangeZoneAllEffect extends SpellAbilityEffect {
                 }
                 if (sa.hasParam("Tapped")) {
                     c.setTapped(true);
+                }
+                if (sa.hasParam("FaceDown")) {
+                    c.turnFaceDown(true);
+                    CardFactoryUtil.setFaceDownState(c, sa);
                 }
             }
             Card movedCard = null;

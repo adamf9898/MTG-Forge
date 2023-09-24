@@ -35,6 +35,8 @@ import java.util.SortedSet;
 
 import forge.game.event.*;
 import forge.game.spellability.AbilitySub;
+import forge.game.spellability.LandAbility;
+
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -619,9 +621,40 @@ public class Player extends GameEntity implements Comparable<Player> {
     }
 
     public final boolean payLife(final int lifePayment, final SpellAbility cause, final boolean effect) {
+        return payLife(lifePayment, cause, effect, null);
+    }
+    public final boolean payLife(final int lifePayment, final SpellAbility cause, final boolean effect, Map<AbilityKey, Object> params) {
+        // fast check for pay zero life
+        if (lifePayment <= 0) {
+            cause.setPaidLife(0);
+            return true;
+        }
+
         if (!canPayLife(lifePayment, effect, cause)) {
             return false;
         }
+
+        // Replacement only matters when life payment is greater than 0
+        Map<AbilityKey, Object> replaceParams = AbilityKey.mapFromAffected(this);
+        replaceParams.put(AbilityKey.Amount, lifePayment);
+        replaceParams.put(AbilityKey.Cause, cause);
+        replaceParams.put(AbilityKey.EffectOnly, effect);
+        // copy replacement params?
+        if (cause.isReplacementAbility() && effect) {
+            replaceParams.putAll(cause.getReplacingObjects());
+        }
+        if (params != null) {
+            replaceParams.putAll(params);
+        }
+        switch (getGame().getReplacementHandler().run(ReplacementType.PayLife, replaceParams)) {
+        case Replaced:
+            return true;
+        case Prevented:
+        case Skipped:
+            return false;
+        default:
+            break;
+        };
 
         final int lost = loseLife(lifePayment, false, false);
         cause.setPaidLife(lifePayment);
@@ -630,6 +663,7 @@ public class Player extends GameEntity implements Comparable<Player> {
         final Map<AbilityKey, Object> runParams = AbilityKey.mapFromPlayer(this);
         runParams.put(AbilityKey.LifeAmount, lifePayment);
         game.getTriggerHandler().runTrigger(TriggerType.PayLife, runParams, false);
+
         if (lost > 0) { // Run triggers if player actually lost life
             boolean runAll = false;
             Map<Player, Integer> lossMap = cause.getLoseLifeMap();
@@ -693,7 +727,7 @@ public class Player extends GameEntity implements Comparable<Player> {
 
     // This function handles damage after replacement and prevention effects are applied
     @Override
-    public final int addDamageAfterPrevention(final int amount, final Card source, final boolean isCombat, GameEntityCounterTable counterTable) {
+    public final int addDamageAfterPrevention(final int amount, final Card source, final SpellAbility cause, final boolean isCombat, GameEntityCounterTable counterTable) {
         if (amount <= 0 || hasLost()) {
             return 0;
         }
@@ -736,6 +770,7 @@ public class Player extends GameEntity implements Comparable<Player> {
         final Map<AbilityKey, Object> runParams = AbilityKey.newMap();
         runParams.put(AbilityKey.DamageSource, source);
         runParams.put(AbilityKey.DamageTarget, this);
+        runParams.put(AbilityKey.Cause, cause);
         runParams.put(AbilityKey.DamageAmount, amount);
         runParams.put(AbilityKey.IsCombatDamage, isCombat);
         // Defending player at the time the damage was dealt
@@ -1334,7 +1369,7 @@ public class Player extends GameEntity implements Comparable<Player> {
             return cards;
         }
         else if (zoneType == ZoneType.Flashback) {
-            return getCardsActivableInExternalZones(true);
+            return getCardsActivatableInExternalZones(true);
         }
 
         PlayerZone zone = getZone(zoneType);
@@ -1377,7 +1412,7 @@ public class Player extends GameEntity implements Comparable<Player> {
         return CardLists.filter(getCardsIn(zone), CardPredicates.nameEquals(cardName));
     }
 
-    public CardCollectionView getCardsActivableInExternalZones(boolean includeCommandZone) {
+    public CardCollectionView getCardsActivatableInExternalZones(boolean includeCommandZone) {
         final CardCollection cl = new CardCollection();
 
         cl.addAll(getZone(ZoneType.Graveyard).getCardsPlayerCanActivate(this));
@@ -1592,11 +1627,7 @@ public class Player extends GameEntity implements Comparable<Player> {
         return notedNum.get(notedFor);
     }
 
-    public final CardCollectionView mill(int n, final ZoneType destination,
-            final boolean bottom, SpellAbility sa, CardZoneTable table, Map<AbilityKey, Object> params) {
-        final CardCollectionView lib = getCardsIn(ZoneType.Library);
-        final CardCollection milled = new CardCollection();
-
+    public final CardCollectionView mill(int n, final ZoneType destination, SpellAbility sa, CardZoneTable table, Map<AbilityKey, Object> params) {
         // Replacement effects
         final Map<AbilityKey, Object> repRunParams = AbilityKey.mapFromAffected(this);
         repRunParams.put(AbilityKey.Number, n);
@@ -1604,7 +1635,7 @@ public class Player extends GameEntity implements Comparable<Player> {
             repRunParams.putAll(params);
         }
 
-        if (destination == ZoneType.Graveyard && !bottom) {
+        if (destination == ZoneType.Graveyard) {
             switch (getGame().getReplacementHandler().run(ReplacementType.Mill, repRunParams)) {
                 case NotReplaced:
                     break;
@@ -1613,24 +1644,15 @@ public class Player extends GameEntity implements Comparable<Player> {
                     if (this.equals(repRunParams.get(AbilityKey.Affected))) {
                         n = (int) repRunParams.get(AbilityKey.Number);
                     } else {
-                        return milled;
+                        return CardCollection.EMPTY;
                     }
                     break;
                 default:
-                    return milled;
+                    return CardCollection.EMPTY;
             }
         }
 
-        final int max = Math.min(n, lib.size());
-
-        for (int i = 0; i < max; i++) {
-            if (bottom) {
-                milled.add(lib.get(lib.size() - i - 1));
-            } else {
-                milled.add(lib.get(i));
-            }
-        }
-
+        CardCollection milled = getTopXCardsFromLibrary(n);
         CardCollectionView milledView = milled;
 
         if (destination == ZoneType.Graveyard) {
@@ -1700,6 +1722,9 @@ public class Player extends GameEntity implements Comparable<Player> {
         land.setController(this, 0);
         if (land.isFaceDown()) {
             land.turnFaceUp(null);
+            if (cause instanceof LandAbility) {
+                land.changeToState(cause.getCardStateName());
+            }
         }
 
         Map<AbilityKey, Object> runParams = AbilityKey.mapFromCard(land);
@@ -2162,7 +2187,7 @@ public class Player extends GameEntity implements Comparable<Player> {
     }
     public final boolean hasManaConversion() {
         return numManaConversion < keywords.getAmount("You may spend mana as though"
-                + " it were mana of any color to cast a spell this turn.");
+                + " it were mana of any type to cast a spell this turn.");
     }
     public final void incNumManaConversion() {
         numManaConversion++;
@@ -3153,6 +3178,7 @@ public class Player extends GameEntity implements Comparable<Player> {
         eff.addStaticAbility(mayBePlayedAbility);
         return eff;
     }
+
     public void createTheRing(Card host) {
         final PlayerZone com = getZone(ZoneType.Command);
         if (theRing == null) {
@@ -3219,6 +3245,7 @@ public class Player extends GameEntity implements Comparable<Player> {
         }
         getTheRing().updateStateForView();
     }
+
     public void changeOwnership(Card card) {
         // If lost then gained, just clear out of lost.
         // If gained then lost, just clear out of gained.

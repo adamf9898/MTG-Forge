@@ -320,11 +320,6 @@ public class PlayerControllerForTests extends PlayerController {
     }
 
     @Override
-    public CardCollectionView getCardsToMulligan(Player firstPlayer) {
-        return null;
-    }
-
-    @Override
     public void declareAttackers(Player attacker, Combat combat) {
         //Doing nothing is safe in most cases, but not all (creatures that must attack etc).  TODO: introduce checks?
         if (playerActions == null) {
@@ -448,11 +443,6 @@ public class PlayerControllerForTests extends PlayerController {
     @Override
     public boolean chooseFlipResult(SpellAbility sa, Player flipper, boolean[] results, boolean call) {
         return true;
-    }
-
-    @Override
-    public Card chooseProtectionShield(GameEntity entityBeingDamaged, List<String> options, Map<String, Card> choiceMap) {
-        return choiceMap.get(options.get(0));
     }
 
     @Override

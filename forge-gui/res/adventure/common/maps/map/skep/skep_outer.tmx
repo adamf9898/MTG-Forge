@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="right-down" width="100" height="86" tilewidth="16" tileheight="16" infinite="0" nextlayerid="10" nextobjectid="266">
+<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="right-down" width="100" height="86" tilewidth="16" tileheight="16" infinite="0" nextlayerid="10" nextobjectid="267">
  <editorsettings>
   <export format="tmx"/>
  </editorsettings>
@@ -7,7 +7,7 @@
  <tileset firstgid="10113" source="../../tileset/buildings.tsx"/>
  <tileset firstgid="11905" source="../../tileset/FarmFood.tsx"/>
  <tileset firstgid="16001" source="../../tileset/buildings-nocollide.tsx"/>
- <tileset firstgid="17793" source="../../tileset/DarkAbbeyTiles.tsx"/>
+ <tileset firstgid="17793" source="../../tileset/dungeon/DarkAbbeyTiles.tsx"/>
  <layer id="6" name="Ground" width="100" height="86">
   <data encoding="base64" compression="zlib">
    eJzt2ktOwzAURuEMkJqIcffAShgixJwNsBCGXQM7oDx2xXMJxKqsuGlC7MSJfzfnk65UMWrviZOqoigAAAAAAADmt98cD9KggZahFleXzWBePueCHuG69tp+HvTNEHqE6dptrBYIw641cN1r6LsnYXmchfS4L2lg9xrYP4Cl8QzWoPZ96LE6nTVRahHLmIYPAr89nluH3NFCBw20jOmwq04HcYT26GpAk3iGevh8R6GHFloAAAAAAFJ6LovipzrMvn79UqZ+R+ti9292b+a3fn3jzHdFkyV91Pv+dOa9PO5h5pbfcjot8RuX6fNWNm1e6/mih4Q7zsYkse/z5qxwNsZjd0CY7eYw0EAPPTTRY5u4A+D85XbWc3u/vp62zeToHLvk3gQAAAAAAACY4rpqBjroocX24KxgKveey/WU3tT9z9HPvd+0//7f9bPWa2ru80SP8ZQ/+/1F6ncwTHl/Xcb8H4HpYEdZjmc5tIfbQbVHzt+ffHrYz2Vb2M+o2iNnvj3cFvSYj+3hPhN895zDMyQ3bg+r3aZv7/SIr+98tDv4Nlq7P/Unops=
@@ -47,11 +47,13 @@
     <property name="dialog">[
 	{
 		&quot;text&quot;: &quot;The Wounded Sliver looks at you interestedly&quot;,
-		&quot;options&quot;: [
+		&quot;options&quot;:
+		[
 			{
 				&quot;name&quot;: &quot;What are you ?&quot;,
 				&quot;text&quot;: &quot;I'm the queen of the Slivers of the Skep, at least I used to be until my position was usurped.&quot;,
-				&quot;options&quot;: [
+				&quot;options&quot;:
+				[
 					{
 						&quot;name&quot;: &quot;Usurped ? What are you talking about ?&quot;,
 						&quot;text&quot;: &quot;For millenia I've been keeping the Sliver of the Skep healthy and peaceful,keeping them under control to prevent them attacking outsiders. Everything changed when the Sliver Queen attacked the Skep. She attacked me and took control over this hive. As you can see, I was unable to defeat her.&quot;,
@@ -82,23 +84,41 @@
 			{
 				&quot;name&quot;: &quot;The Sliver Queen is no more !&quot;,
 				&quot;text&quot;: &quot;Thank you for what you have done. I'll return to my rightful place as queen of the slivers'&quot;,
-				&quot;condition&quot;: [
+				&quot;condition&quot;:
+				[
 					{
 						&quot;checkQuestFlag&quot;: &quot;SliverQueenDefeated&quot;,
 						&quot;not&quot;: false
 					}
 				],
-				&quot;options&quot;: [
+				&quot;options&quot;:
+				[
 					{
 						&quot;name&quot;: &quot;Leave&quot;,
-						&quot;action&quot;: [
-							{
-								&quot;setQuestFlag&quot;: {
-									&quot;key&quot;: &quot;QuestCompleted&quot;,
-									&quot;val&quot;: 1
-								}
-							}
-						]
+						&quot;text&quot;: &quot;G'day to you, adventurer&quot;,
+                        &quot;condition&quot;:
+                        [
+                        	{
+                        		&quot;checkMapFlag&quot;: &quot;TalkedTo&quot;,
+                        		&quot;not&quot;: true
+                        	}
+                        ],
+                        &quot;options&quot;:
+                        [
+                        	{
+                        		&quot;name&quot;: &quot;leave&quot;,
+                        		&quot;action&quot;:
+                        		[
+                        			{
+                        				&quot;setQuestFlag&quot;:
+                        				{
+                        					&quot;key&quot;: &quot;TalkedTo&quot;,
+                        					&quot;val&quot;: 1
+                        				}
+                        			}
+                        		]
+                        	}
+                        ]
 					}
 				]
 			}
@@ -235,7 +255,7 @@
     <property name="waypoints" value="160,164,161,162,161,189"/>
    </properties>
   </object>
-  <object id="73" template="../../obj/enemy.tx" x="484.5" y="1343.75" width="16" height="16" visible="1">
+  <object id="73" template="../../obj/enemy.tx" x="1378.5" y="1327.75" width="16" height="16" visible="1">
    <properties>
     <property name="dialog">[
   {
@@ -1109,17 +1129,24 @@
     <property name="threatRange" type="int" value="0"/>
    </properties>
   </object>
-  <object id="241" template="../../obj/enemy.tx" x="223.333" y="1128.67" width="16" height="16" visible="1">
+  <object id="241" template="../../obj/enemy.tx" x="1516.33" y="1365.67" width="16" height="16" visible="1">
    <properties>
     <property name="dialog">[
-  {
-    &quot;text&quot;: &quot;G'day to you, adventurer&quot;,
-    &quot;options&quot;: [
-      {
-        &quot;name&quot;: &quot;leave&quot;
-      }
-    ]
-  }
+	{
+		&quot;text&quot;: &quot;G'day to you, adventurer&quot;,
+		&quot;condition&quot;: [
+			{
+				&quot;checkMapFlag&quot;: &quot;mayorSpawned&quot;,
+				&quot;not&quot;: true
+			}
+		],
+			&quot;options&quot;:
+			[
+				{
+					&quot;name&quot;: &quot;leave&quot;
+				}
+			]
+	}
 ]</property>
     <property name="enemy" value="Knight"/>
     <property name="spawn.Easy" type="bool" value="true"/>
@@ -1173,7 +1200,7 @@
   </object>
   <object id="251" template="../../obj/shop.tx" x="303.667" y="1248.29" width="31.3333" height="32.4167">
    <properties>
-    <property name="commonShopList" value="FlipShop"/>
+    <property name="commonShopList" value="Soldier4Red"/>
     <property name="noRestock" type="bool" value="false"/>
     <property name="signXOffset" type="float" value="0"/>
     <property name="signYOffset" type="float" value="-5"/>
@@ -1181,7 +1208,7 @@
   </object>
   <object id="252" template="../../obj/shop.tx" x="336.334" y="1248.46" width="31.3333" height="32.4167">
    <properties>
-    <property name="commonShopList" value="LargeSeaCreatures"/>
+    <property name="commonShopList" value="Equip"/>
     <property name="noRestock" type="bool" value="false"/>
     <property name="signXOffset" type="float" value="0"/>
     <property name="signYOffset" type="float" value="-5"/>
@@ -1237,11 +1264,6 @@
   &quot;type&quot;: &quot;randomCard&quot;,
   &quot;count&quot;: 3,
   &quot;addMaxCount&quot;: 2
-},{
-  &quot;type&quot;: &quot;item&quot;,
-  &quot;probability&quot;: 0.02,
-  &quot;count&quot;: 1,
-  &quot;itemName&quot;: &quot;Demonic Contract&quot;
 }]</property>
    </properties>
   </object>
@@ -1261,11 +1283,6 @@
   &quot;type&quot;: &quot;randomCard&quot;,
   &quot;count&quot;: 3,
   &quot;addMaxCount&quot;: 2
-},{
-  &quot;type&quot;: &quot;item&quot;,
-  &quot;probability&quot;: 0.02,
-  &quot;count&quot;: 1,
-  &quot;itemName&quot;: &quot;Demonic Contract&quot;
 }]</property>
    </properties>
   </object>
@@ -1285,12 +1302,8 @@
   &quot;type&quot;: &quot;randomCard&quot;,
   &quot;count&quot;: 3,
   &quot;addMaxCount&quot;: 2
-},{
-  &quot;type&quot;: &quot;item&quot;,
-  &quot;probability&quot;: 0.02,
-  &quot;count&quot;: 1,
-  &quot;itemName&quot;: &quot;Demonic Contract&quot;
-}]</property>
+}
+]</property>
    </properties>
   </object>
   <object id="260" template="../../obj/treasure.tx" x="166.667" y="668.667">
@@ -1309,11 +1322,6 @@
   &quot;type&quot;: &quot;randomCard&quot;,
   &quot;count&quot;: 3,
   &quot;addMaxCount&quot;: 2
-},{
-  &quot;type&quot;: &quot;item&quot;,
-  &quot;probability&quot;: 0.02,
-  &quot;count&quot;: 1,
-  &quot;itemName&quot;: &quot;Demonic Contract&quot;
 }]</property>
    </properties>
   </object>
@@ -1329,7 +1337,7 @@
   </object>
   <object id="264" template="../../obj/shop.tx" x="272" y="1247.79" width="31.3333" height="32.4167">
    <properties>
-    <property name="commonShopList" value="Battle"/>
+    <property name="commonShopList" value="Soldier"/>
     <property name="noRestock" type="bool" value="false"/>
     <property name="signXOffset" type="float" value="0"/>
     <property name="signYOffset" type="float" value="-5"/>
@@ -1337,10 +1345,29 @@
   </object>
   <object id="265" template="../../obj/shop.tx" x="401.667" y="1249.12" width="31.3333" height="32.4167">
    <properties>
-    <property name="commonShopList" value="Saga"/>
+    <property name="commonShopList" value="Sliver"/>
     <property name="noRestock" type="bool" value="false"/>
     <property name="signXOffset" type="float" value="0"/>
     <property name="signYOffset" type="float" value="-5"/>
+   </properties>
+  </object>
+  <object id="266" template="../../obj/enemy.tx" x="333" y="1328" width="16" height="16" visible="1">
+   <properties>
+    <property name="dialog">[
+  {
+    &quot;text&quot;: &quot;Many mouths to feed, little time for smalltalk.&quot;,
+    &quot;options&quot;: [
+      {
+        &quot;name&quot;: &quot;leave&quot;
+      }
+    ]
+  }
+]</property>
+    <property name="enemy" value="Farmer"/>
+    <property name="spawn.Easy" type="bool" value="true"/>
+    <property name="spawn.Hard" type="bool" value="true"/>
+    <property name="spawn.Normal" type="bool" value="true"/>
+    <property name="threatRange" type="int" value="0"/>
    </properties>
   </object>
  </objectgroup>

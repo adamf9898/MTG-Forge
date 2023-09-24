@@ -293,6 +293,47 @@ public class SpecialCardAi {
         }
     }
 
+    public static class PithingNeedle {
+        public static String chooseCard(final Player ai, final SpellAbility sa) {
+            // TODO Remove names of cards already named by other Pithing Needles
+            Card best = null;
+
+            CardCollection oppPerms = CardLists.getValidCards(ai.getOpponents().getCardsIn(ZoneType.Battlefield), "Card.OppCtrl+hasNonmanaAbilities", ai, sa.getHostCard(), sa);
+            if (!oppPerms.isEmpty()) {
+                return chooseCardFromList(oppPerms).getName();
+            }
+
+            CardCollection visibleZones = CardLists.getValidCards(ai.getOpponents().getCardsIn(Lists.newArrayList(ZoneType.Graveyard, ZoneType.Exile)), "Card.OppCtrl+hasNonmanaAbilities", ai, sa.getHostCard(), sa);
+            if (!visibleZones.isEmpty()) {
+                // If nothing on the battlefield has a nonmana ability choose something
+                return chooseCardFromList(visibleZones).getName();
+            }
+
+            return chooseNonBattlefieldName();
+        }
+
+        static public Card chooseCardFromList(CardCollection cardlist) {
+            Card best = ComputerUtilCard.getBestPlaneswalkerAI(cardlist);
+            if (best != null) {
+                // No planeswalkers choose something!
+                return best;
+            }
+
+            best = ComputerUtilCard.getBestCreatureAI(cardlist);
+            if (best == null) {
+                // If nothing on the battlefield has a nonmana ability choose something
+                Collections.shuffle(cardlist);
+                best = cardlist.getFirst();
+            }
+
+            return best;
+        }
+
+        static public String chooseNonBattlefieldName() {
+            return "Liliana of the Veil";
+        }
+    }
+
     // Deathgorge Scavenger
     public static class DeathgorgeScavenger {
         public static boolean consider(final Player ai, final SpellAbility sa) {
@@ -639,6 +680,7 @@ public class SpecialCardAi {
     // Gideon Blackblade
     public static class GideonBlackblade {
         public static boolean consider(final Player ai, final SpellAbility sa) {
+            sa.resetTargets();
             CardCollectionView otb = CardLists.filter(ai.getCardsIn(ZoneType.Battlefield), CardPredicates.isTargetableBy(sa));
             if (!otb.isEmpty()) {
                 sa.getTargets().add(ComputerUtilCard.getBestAI(otb));

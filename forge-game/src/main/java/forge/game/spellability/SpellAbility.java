@@ -19,6 +19,7 @@ package forge.game.spellability;
 
 import java.util.*;
 
+import forge.game.cost.CostSacrifice;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -29,6 +30,7 @@ import forge.GameCommand;
 import forge.card.CardStateName;
 import forge.card.ColorSet;
 import forge.card.MagicColor;
+import forge.card.mana.ManaAtom;
 import forge.card.mana.ManaCost;
 import forge.game.CardTraitBase;
 import forge.game.ForgeScript;
@@ -47,6 +49,7 @@ import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
 import forge.game.card.CardDamageMap;
 import forge.game.card.CardFactory;
+import forge.game.card.CardPlayOption;
 import forge.game.card.CardPredicates;
 import forge.game.card.CardZoneTable;
 import forge.game.cost.Cost;
@@ -172,7 +175,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
 
     private SpellAbilityView view;
 
-    private StaticAbility mayPlay;
+    private CardPlayOption mayPlay;
 
     private CardCollection lastStateBattlefield;
     private CardCollection lastStateGraveyard;
@@ -290,7 +293,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         }
 
         AbilityManaPart mp = getManaPart();
-        if (mp != null && metConditions() && mp.meetsManaRestrictions(saPaidFor) && mp.abilityProducesManaColor(this, colorNeeded)) {
+        if (mp != null && metConditions() && mp.meetsManaRestrictions(saPaidFor) && mp.abilityProducesManaColor(this, colorNeeded) && saPaidFor.allowsPayingWithShard(mp.getSourceCard(), colorNeeded)) {
             return true;
         }
         return this.subAbility != null && this.subAbility.isManaAbilityFor(saPaidFor, colorNeeded);
@@ -386,6 +389,21 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
 
     protected final void setManaPart(AbilityManaPart manaPart0) {
         manaPart = manaPart0;
+    }
+
+    public boolean allowsPayingWithShard(Card src, byte shard) {
+        if (!hasParam("ManaRestriction")) { return true; }
+        String res = getParam("ManaRestriction");
+        if (res.equals("None")) {
+            return false;
+        }
+        if (res.equals("ChosenColor")) {
+            return this.getHostCard().hasChosenColor() && shard == ManaAtom.fromName(this.getHostCard().getChosenColor());
+        }
+        if (!src.isValid(res, null, null, this)) {
+            return false;
+        }
+        return true;
     }
 
     // Spell, and Ability, and other Ability objects override this method
@@ -733,6 +751,10 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         if (!cost.getPip().equals("")) {
             pipsToReduce.add(cost.getPip());
         }
+    }
+
+    public boolean isBargain() {
+        return isOptionalCostPaid(OptionalCost.Bargain);
     }
 
     public boolean isBuyBackAbility() {
@@ -1094,10 +1116,13 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         return lastChapter = value;
     }
 
-    public StaticAbility getMayPlay() {
+    public CardPlayOption getMayPlayOption() {
         return mayPlay;
     }
-    public void setMayPlay(final StaticAbility sta) {
+    public StaticAbility getMayPlay() {
+        return mayPlay != null ? mayPlay.getAbility() : null;
+    }
+    public void setMayPlay(final CardPlayOption sta) {
         mayPlay = sta;
     }
 
@@ -2283,6 +2308,11 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
             if (costPart instanceof CostTap && !Untap.canUntap(getHostCard())) {
                 score += 10;
+            }
+            if (costPart instanceof CostSacrifice && !costPart.payCostFromSource()) {
+                // Need to sacrifice "something else". Since we lose that something else, add a large sum since the AI
+                // isn't trustworthy to pick
+                score += 40;
             }
             // Increase score by 1 for each costpart in general
             score++;

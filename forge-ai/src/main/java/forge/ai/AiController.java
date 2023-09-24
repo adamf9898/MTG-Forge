@@ -279,6 +279,11 @@ public class AiController {
                 continue;
             }
 
+            // can't fetch partner isn't problematic
+            if (tr.getKeyword() != null && tr.getKeyword().getOriginal().startsWith("Partner")) {
+                continue;
+            }
+
             if (!ZoneType.Battlefield.toString().equals(tr.getParam("Destination"))) {
                 continue;
             }
@@ -513,6 +518,8 @@ public class AiController {
         if (!unreflectedLands.isEmpty()) {
             landList = unreflectedLands;
         }
+
+        // TODO If there's nothing to do with the mana, then play a tapland
 
         //try to skip lands that enter the battlefield tapped
         if (!nonLandsInHand.isEmpty()) {
@@ -1197,16 +1204,17 @@ public class AiController {
     }
 
     public boolean confirmAction(SpellAbility sa, PlayerActionConfirmMode mode, String message, Map<String, Object> params) {
-        if (mode == PlayerActionConfirmMode.AlternativeDamageAssignment) {
+        if (mode == PlayerActionConfirmMode.AlternativeDamageAssignment || mode == PlayerActionConfirmMode.ChangeZoneToAltDestination) {
+            System.err.printf("Overriding AI confirmAction decision for %s, defaulting to true.\n", mode);
             return true;
         }
 
-        ApiType api = sa.getApi();
+        ApiType api = sa == null ? null : sa.getApi();
 
         // Abilities without api may also use this routine, However they should provide a unique mode value ?? How could this work?
-        if (api == null) {
-            String exMsg = String.format("AI confirmAction does not know what to decide about %s mode (api is null).",
-                    mode);
+        if (sa == null || api == null) {
+            String exMsg = String.format("AI confirmAction does not know what to decide about %s mode (%s is null).",
+                    mode, sa == null ? "SA" : "API");
             throw new IllegalArgumentException(exMsg);
         }
         return SpellApiToAi.Converter.get(api).confirmAction(player, sa, mode, message, params);
@@ -1384,7 +1392,7 @@ public class AiController {
 
                     // add mayPlay option
                     for (CardPlayOption o : land.mayPlay(player)) {
-                        la = new LandAbility(land, player, o.getAbility());
+                        la = new LandAbility(land, player, o);
                         la.setCardState(land.getCurrentState());
                         if (la.canPlay()) {
                             abilities.add(la);
@@ -2141,7 +2149,7 @@ public class AiController {
     }
 
     private <T extends CardTraitBase> List<T> filterListByAiLogic(List<T> list, final String logic) {
-        return filterList(list, CardTraitPredicates.hasParam("AiLogic", logic));
+        return filterList(list, CardTraitPredicates.hasParam("AILogic", logic));
     }
 
     public List<AbilitySub> chooseModeForAbility(SpellAbility sa, List<AbilitySub> possible, int min, int num, boolean allowRepeat) {

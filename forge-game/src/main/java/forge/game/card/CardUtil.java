@@ -58,7 +58,7 @@ public final class CardUtil {
     public static final ImmutableList<String> modifiableKeywords = ImmutableList.<String>builder().add(
             "Enchant", "Protection", "Cumulative upkeep", "Equip", "Buyback",
             "Cycling", "Echo", "Kicker", "Flashback", "Madness", "Morph",
-            "Affinity", "Entwine", "Splice", "Ninjutsu", "Presence",
+            "Affinity", "Entwine", "Splice", "Ninjutsu",
             "Transmute", "Replicate", "Recover", "Squad", "Suspend", "Aura swap",
             "Fortify", "Transfigure", "Champion", "Evoke", "Prowl",
             "Reinforce", "Unearth", "Level up", "Miracle", "Overload", "Cleave",
@@ -327,7 +327,7 @@ public final class CardUtil {
 
         newCopy.setForetold(in.isForetold());
         newCopy.setForetoldThisTurn(in.isForetoldThisTurn());
-        newCopy.setForetoldByEffect(in.isForetoldByEffect());
+        newCopy.setForetoldCostByEffect(in.isForetoldCostByEffect());
 
         newCopy.setMeldedWith(getLKICopy(in.getMeldedWith(), cachedMap));
 
