@@ -176,19 +176,11 @@
 			],
 			"rarity": [
 				"Common",
-				"Uncommon"
-			],
-			"colorType": "MonoColor"
-		},
-		{
-			"type": "deckCard",
-			"probability": 0.5,
-			"count": 1,
-			"addMaxCount": 4,
-			"rarity": [
+				"Uncommon",
 				"Rare",
 				"Mythic Rare"
-			]
+			],
+			"colorType": "MonoColor"
 		}
 	],
 	"questTags": [
@@ -3989,8 +3981,8 @@
 		{
 			"type": "deckCard",
 			"probability": 1,
-			"count": 4,
-			"addMaxCount": 6,
+			"count": 2,
+			"addMaxCount": 2,
 			"rarity": [
 				"Common",
 				"Rare",
@@ -8969,7 +8961,6 @@
 		"decks/standard/eldrazi.dck"
 	],
 	"ai": "",
-	"flying": true,
 	"spawnRate": 0.5,
 	"difficulty": 0.1,
 	"speed": 15,
@@ -15123,9 +15114,9 @@
 		},
 		{
 			"type": "gold",
-			"probability": 0.7,
+			"probability": 1,
 			"count": 10,
-			"addMaxCount": 90
+			"addMaxCount": 30
 		},
 		{
 			"type": "card",
@@ -22319,7 +22310,7 @@
 			"type": "deckCard",
 			"probability": 1,
 			"count": 2,
-			"addMaxCount": 4
+			"addMaxCount": 1
 		},
 		{
 			"type": "card",
@@ -23847,7 +23838,7 @@
 	"name": "Snow Wizard",
 	"sprite": "sprites/enemy/humanoid/human/wizard/simic_wiz.atlas",
 	"deck": [
-		"decks/standard/simicwizard_snow.dck",
+		"decks/standard/simicwizard_snow.dck"
 	],
 	"ai": "",
 	"randomizeDeck": true,
@@ -24994,7 +24985,6 @@
 			"type": "item",
 			"probability": 1,
 			"count": 1,
-			"addMaxCount": 100,
 			"itemName": "Tibalt's Bag of Tricks",
 			"itemNames": [
 				"Tibalt's Bag of Tricks"
@@ -26038,7 +26028,7 @@
 			"type": "card",
 			"probability": 1,
 			"count": 2,
-			"addMaxCount": 4,
+			"addMaxCount": 1,
 			"colors": [
 				"Red"
 			],
@@ -26051,7 +26041,7 @@
 			"type": "card",
 			"probability": 0.5,
 			"count": 2,
-			"addMaxCount": 3,
+			"addMaxCount": 1,
 			"colors": [
 				"Red"
 			],
@@ -26287,9 +26277,9 @@
 },
 {
 	"name": "Plague Rat Swarm",
-	"sprite": "sprites/enemy/beast/wildrat.atlas",
+	"sprite": "sprites/enemy/beast/wildratpoison.atlas",
 	"deck": [
-		"decks/standard/rat_realmagic.dck"
+		"decks/standard/rat_poisonrat.dck"
 	],
 	"ai": "",
 	"randomizeDeck": true,
@@ -26356,8 +26346,7 @@
 	"deck": [
 		"decks/standard/infectrat.dck",
 		"decks/standard/rat.json",
-		"decks/standard/ratswarm.dck",
-		"decks/standard/rat_realmagic.dck"
+		"decks/standard/ratswarm.dck"
 	],
 	"ai": "",
 	"randomizeDeck": true,

@@ -32,6 +32,7 @@ import forge.game.cost.Cost;
 import forge.game.cost.CostDiscard;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostReveal;
+import forge.game.keyword.Keyword;
 import forge.game.mana.ManaCostBeingPaid;
 import forge.game.player.Player;
 import forge.game.replacement.ReplacementEffect;
@@ -91,10 +92,6 @@ public class PlayEffect extends SpellAbilityEffect {
         final boolean forget = sa.hasParam("ForgetPlayed");
         final boolean hasTotalCMCLimit = sa.hasParam("WithTotalCMC");
         int totalCMCLimit = Integer.MAX_VALUE;
-        int amount = 1;
-        if (sa.hasParam("Amount") && !sa.getParam("Amount").equals("All")) {
-            amount = AbilityUtils.calculateAmount(source, sa.getParam("Amount"), sa);
-        }
         final Player controller;
         if (sa.hasParam("Controller")) {
             controller = AbilityUtils.getDefinedPlayers(source, sa.getParam("Controller"), sa).get(0);
@@ -164,7 +161,7 @@ public class PlayEffect extends SpellAbilityEffect {
                 return;
             }
         } else if (sa.hasParam("CopyFromChosenName")) {
-            String name = source.getChosenName();
+            String name = controller.getNamedCard();
             if (name.trim().isEmpty()) return;
             Card card = Card.fromPaperCard(StaticData.instance().getCommonCards().getUniqueByName(name), controller);
             // so it gets added to stack
@@ -204,8 +201,13 @@ public class PlayEffect extends SpellAbilityEffect {
             }
         }
 
-        if (sa.hasParam("Amount") && sa.getParam("Amount").equals("All")) {
-            amount = tgtCards.size();
+        int amount = 1;
+        if (sa.hasParam("Amount")) {
+            if (sa.getParam("Amount").equals("All")) {
+                amount = tgtCards.size();
+            } else {
+                amount = AbilityUtils.calculateAmount(source, sa.getParam("Amount"), sa);
+            }
         }
 
         if (hasTotalCMCLimit) {
@@ -382,6 +384,8 @@ public class PlayEffect extends SpellAbilityEffect {
                         continue;
                     }
                     abCost = new Cost(source.getManaCost(), false);
+                } else if (cost.equals("SuspendCost")) {
+                    abCost = Iterables.find(tgtCard.getNonManaAbilities(), s -> s.getKeyword() != null && s.getKeyword().getKeyword() == Keyword.SUSPEND).getPayCosts();
                 } else {
                     if (cost.contains("ConvertedManaCost")) {
                         if (unpayableCost) {

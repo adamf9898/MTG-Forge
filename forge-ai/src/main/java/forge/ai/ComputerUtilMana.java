@@ -654,6 +654,11 @@ public class ComputerUtilMana {
     }
 
     private static boolean payManaCost(final ManaCostBeingPaid cost, final SpellAbility sa, final Player ai, final boolean test, boolean checkPlayable, boolean effect) {
+        if (!CostPayment.handleOfferings(sa, test, cost.isPaid())) {
+            // nothing was chosen
+            return false;
+        }
+
         AiCardMemory.clearMemorySet(ai, MemorySet.PAYS_TAP_COST);
         AiCardMemory.clearMemorySet(ai, MemorySet.PAYS_SAC_COST);
         adjustManaCostToAvoidNegEffects(cost, sa.getHostCard(), ai);
@@ -965,12 +970,6 @@ public class ComputerUtilMana {
         AbilityManaPart m = ma.getManaPart();
         if (!m.meetsManaRestrictions(sa)) {
             return false;
-        }
-
-        if (ma.hasParam("ActivationLimit")) {
-            if (ma.getActivationsThisTurn() >= AbilityUtils.calculateAmount(sourceCard, ma.getParam("ActivationLimit"), ma)) {
-                return false;
-            }
         }
 
         if (checkCosts) {
@@ -1468,6 +1467,26 @@ public class ComputerUtilMana {
                     }
                 }
             }
+            // exclude cards that will deal lethal damage when tapped
+            if (ai.canLoseLife() && !ai.cantLoseForZeroOrLessLife()) {
+                boolean dealsLethalOnTap = false;
+                for (Trigger t : card.getTriggers()) {
+                    if (t.getMode() == TriggerType.Taps || t.getMode() == TriggerType.TapsForMana) {
+                        SpellAbility trigSa = t.getOverridingAbility();
+                        if (trigSa.getApi() == ApiType.DealDamage && trigSa.getParamOrDefault("Defined", "").equals("You")) {
+                            int numDamage = AbilityUtils.calculateAmount(card, trigSa.getParam("NumDmg"), null);
+                            numDamage = ai.staticReplaceDamage(numDamage, card, false);
+                            if (ai.getLife() <= numDamage) {
+                                dealsLethalOnTap = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (dealsLethalOnTap) {
+                    continue;
+                }
+            }
 
             if (card.isCreature() || card.isEnchanted()) {
                 otherManaSources.add(card);
@@ -1689,12 +1708,16 @@ public class ComputerUtilMana {
      * @since 1.0.15
      */
     public static int determineLeftoverMana(final SpellAbility sa, final Player player, final boolean effect) {
-        for (int i = 1; i < 100; i++) {
+        int max = 99;
+        if (sa.hasParam("XMaxLimit")) {
+            max = Math.min(max, AbilityUtils.calculateAmount(sa.getHostCard(), sa.getParam("XMaxLimit"), sa));
+        }
+        for (int i = 1; i <= max; i++) {
             if (!canPayManaCost(sa.getRootAbility(), player, i, effect)) {
                 return i - 1;
             }
         }
-        return 99;
+        return max;
     }
 
     /**
