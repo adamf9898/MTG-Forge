@@ -17,7 +17,6 @@
  */
 package forge.game.combat;
 
-import com.google.common.base.Function;
 import com.google.common.collect.*;
 import forge.game.*;
 import forge.game.ability.AbilityKey;
@@ -31,6 +30,7 @@ import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityStackInstance;
 import forge.game.staticability.StaticAbilityAssignCombatDamageAsUnblocked;
 import forge.game.trigger.TriggerType;
+import forge.game.zone.ZoneType;
 import forge.util.CardTranslation;
 import forge.util.Localizer;
 import forge.util.collect.FCollection;
@@ -71,7 +71,7 @@ public class Combat {
         initConstraints();
     }
 
-    public Combat(Combat combat, GameObjectMap map) {
+    public Combat(Combat combat, IEntityMap map) {
         playerWhoAttacks = map.map(combat.playerWhoAttacks);
         for (GameEntity entry : combat.attackableEntries) {
             attackableEntries.add(map.map(entry));
@@ -154,13 +154,18 @@ public class Combat {
         lkiCache.clear();
         combatantsThatDealtFirstStrikeDamage.clear();
 
+        //clear tracking for cards that care about "this combat"
+        Game game = playerWhoAttacks.getGame();
+        for (Card c : game.getCardsIncludePhasingIn(ZoneType.Battlefield)) {
+            c.getDamageHistory().endCombat();
+        }
+        playerWhoAttacks.clearAttackedPlayersMyCombat();
+
         //update view for all attackers and blockers
         for (Card c : attackers) {
-            c.getDamageHistory().endCombat();
             c.updateAttackingForView();
         }
         for (Card c : blockers) {
-            c.getDamageHistory().endCombat();
             c.updateBlockingForView();
         }
     }
@@ -219,12 +224,7 @@ public class Combat {
     }
 
     public final Map<Card, GameEntity> getAttackersAndDefenders() {
-        return Maps.asMap(getAttackers().asSet(), new Function<Card, GameEntity>() {
-            @Override
-            public GameEntity apply(final Card attacker) {
-                return getDefenderByAttacker(attacker);
-            }
-        });
+        return Maps.asMap(getAttackers().asSet(), this::getDefenderByAttacker);
     }
 
     public final List<AttackingBand> getAttackingBandsOf(GameEntity defender) {
@@ -293,7 +293,6 @@ public class Combat {
             } else {
                 return def.getController();
             }
-
         }
 
         return null;
@@ -516,7 +515,7 @@ public class Combat {
      * @param blocker the blocking creature.
      */
     public void addBlockerToDamageAssignmentOrder(Card attacker, Card blocker) {
-    	final CardCollection oldBlockers = blockersOrderedForDamageAssignment.get(attacker);
+        final CardCollection oldBlockers = blockersOrderedForDamageAssignment.get(attacker);
     	if (oldBlockers == null || oldBlockers.isEmpty()) {
    			blockersOrderedForDamageAssignment.put(attacker, new CardCollection(blocker));
     	} else {
@@ -627,11 +626,17 @@ public class Combat {
     }
 
     public final boolean removeAbsentCombatants() {
-        // iterate all attackers and remove illegal declarations
+        // CR 506.4 iterate all attackers and remove illegal declarations
         CardCollection missingCombatants = new CardCollection();
         for (Entry<GameEntity, AttackingBand> ee : attackedByBands.entries()) {
             for (Card c : ee.getValue().getAttackers()) {
                 if (!c.isInPlay() || !c.isCreature()) {
+                    missingCombatants.add(c);
+                }
+            }
+            if (ee.getKey() instanceof Card) {
+                Card c = (Card) ee.getKey();
+                if (!c.isBattle() && !c.isPlaneswalker()) {
                     missingCombatants.add(c);
                 }
             }
@@ -685,7 +690,7 @@ public class Combat {
         }
     }
 
-    private final boolean assignBlockersDamage(boolean firstStrikeDamage) {
+    private boolean assignBlockersDamage(boolean firstStrikeDamage) {
         // Assign damage by Blockers
         final CardCollection blockers = getAllBlockers();
         boolean assignedDamage = false;
@@ -713,7 +718,7 @@ public class Combat {
                 Player defender = null;
                 boolean divideCombatDamageAsChoose = blocker.hasKeyword("You may assign CARDNAME's combat damage divided as you choose among " +
                                 "defending player and/or any number of creatures they control.")
-                        && blocker.getController().getController().confirmAction(null, null,
+                        && blocker.getController().getController().confirmStaticApplication(blocker, PlayerActionConfirmMode.AlternativeDamageAssignment,
                         Localizer.getInstance().getMessage("lblAssignCombatDamageAsChoose",
                                 CardTranslation.getTranslatedName(blocker.getName())), null);
                 // choose defending player
@@ -741,7 +746,7 @@ public class Combat {
         return assignedDamage;
     }
 
-    private final boolean assignAttackersDamage(boolean firstStrikeDamage) {
+    private boolean assignAttackersDamage(boolean firstStrikeDamage) {
         // Assign damage by Attackers
         CardCollection orderedBlockers = null;
         final CardCollection attackers = getAttackers();
@@ -785,15 +790,13 @@ public class Combat {
                 assigningPlayer = orderedBlockers.get(0).getController();
             }
 
-            final SpellAbility emptySA = new SpellAbility.EmptySa(ApiType.Cleanup, attacker);
-
             boolean assignToPlayer = false;
             if (StaticAbilityAssignCombatDamageAsUnblocked.assignCombatDamageAsUnblocked(attacker, false)) {
                 assignToPlayer = true;
             }
             if (!assignToPlayer && attacker.getGame().getCombat().isBlocked(attacker)
                     && StaticAbilityAssignCombatDamageAsUnblocked.assignCombatDamageAsUnblocked(attacker)) {
-                assignToPlayer = assigningPlayer.getController().confirmAction(emptySA, PlayerActionConfirmMode.AlternativeDamageAssignment,
+                assignToPlayer = assigningPlayer.getController().confirmStaticApplication(attacker, PlayerActionConfirmMode.AlternativeDamageAssignment,
                         Localizer.getInstance().getMessage("lblAssignCombatDamageWerentBlocked",
                                 CardTranslation.getTranslatedName(attacker.getName())), null);
             }
@@ -805,31 +808,28 @@ public class Combat {
                 divideCombatDamageAsChoose = getDefendersCreatures().size() > 0 &&
                         attacker.hasKeyword("You may assign CARDNAME's combat damage divided as you choose among " +
                                 "defending player and/or any number of creatures they control.")
-                        && assigningPlayer.getController().confirmAction(emptySA, PlayerActionConfirmMode.AlternativeDamageAssignment,
+                        && assigningPlayer.getController().confirmStaticApplication(attacker, PlayerActionConfirmMode.AlternativeDamageAssignment,
                                 Localizer.getInstance().getMessage("lblAssignCombatDamageAsChoose",
                                         CardTranslation.getTranslatedName(attacker.getName())), null);
                 if (defender instanceof Card && divideCombatDamageAsChoose) {
                     defender = getDefenderPlayerByAttacker(attacker);
                 }
 
-                assignCombatDamageToCreature = !attacker.getGame().getCombat().isBlocked(attacker) &&
-                        getDefendersCreatures().size() > 0 &&
-                        attacker.hasKeyword("If CARDNAME is unblocked, you may have it assign its combat damage to " +
-                                "a creature defending player controls.") &&
-                        assigningPlayer.getController().confirmAction(emptySA, PlayerActionConfirmMode.AlternativeDamageAssignment,
-                                Localizer.getInstance().getMessage("lblAssignCombatDamageToCreature",
-                                        CardTranslation.getTranslatedName(attacker.getName())), null);
-                        if (divideCombatDamageAsChoose) {
-                            if (orderedBlockers == null || orderedBlockers.isEmpty()) {
-                                orderedBlockers = getDefendersCreatures();
-                            } else {
-                                for (Card c : getDefendersCreatures()) {
-                                    if (!orderedBlockers.contains(c)) {
-                                        orderedBlockers.add(c);
-                                    }
-                                }
+                assignCombatDamageToCreature = !attacker.getGame().getCombat().isBlocked(attacker) && getDefendersCreatures().size() > 0 &&
+                        attacker.hasKeyword("If CARDNAME is unblocked, you may have it assign its combat damage to a creature defending player controls.") &&
+                        assigningPlayer.getController().confirmStaticApplication(attacker, PlayerActionConfirmMode.AlternativeDamageAssignment,
+                                Localizer.getInstance().getMessage("lblAssignCombatDamageToCreature", CardTranslation.getTranslatedName(attacker.getName())), null);
+                if (divideCombatDamageAsChoose) {
+                    if (orderedBlockers == null || orderedBlockers.isEmpty()) {
+                        orderedBlockers = getDefendersCreatures();
+                    } else {
+                        for (Card c : getDefendersCreatures()) {
+                            if (!orderedBlockers.contains(c)) {
+                                orderedBlockers.add(c);
                             }
                         }
+                    }
+                }
             }
 
             assignedDamage = true;
@@ -849,6 +849,7 @@ public class Combat {
             else if (orderedBlockers == null || orderedBlockers.isEmpty()) {
                 attackers.remove(attacker);
                 if (assignCombatDamageToCreature) {
+                    final SpellAbility emptySA = new SpellAbility.EmptySa(ApiType.Cleanup, attacker);
                     Card chosen = attacker.getController().getController().chooseCardsForEffect(getDefendersCreatures(),
                             emptySA, Localizer.getInstance().getMessage("lblChooseCreature"), 1, 1, false, null).get(0);
                     damageMap.put(attacker, chosen, damageDealt);
@@ -885,7 +886,7 @@ public class Combat {
         return assignedDamage;
     }
 
-    private final boolean dealDamageThisPhase(Card combatant, boolean firstStrikeDamage) {
+    private boolean dealDamageThisPhase(Card combatant, boolean firstStrikeDamage) {
         // During first strike damage, double strike and first strike deal damage
         // During regular strike damage, double strike and anyone who hasn't dealt damage deal damage
         if (combatant.hasDoubleStrike()) {
@@ -905,10 +906,6 @@ public class Combat {
             combatantsThatDealtFirstStrikeDamage.clear();
         }
         return assignedDamage;
-    }
-
-    public final CardDamageMap getDamageMap() {
-        return damageMap;
     }
 
     public void dealAssignedDamage() {
@@ -985,7 +982,7 @@ public class Combat {
 
     public CombatLki saveLKI(Card lki) {
         if (!lki.isLKI()) {
-            lki = CardUtil.getLKICopy(lki);
+            lki = CardCopyService.getLKICopy(lki);
         }
         FCollectionView<AttackingBand> attackersBlocked = null;
         final AttackingBand attackingBand = getBandOfAttacker(lki);

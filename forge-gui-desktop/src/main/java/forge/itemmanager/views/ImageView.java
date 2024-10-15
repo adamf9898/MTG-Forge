@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+import java.util.stream.IntStream;
 
 public class ImageView<T extends InventoryItem> extends ItemView<T> {
     private static final int PADDING = 5;
@@ -62,6 +63,7 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
     private Point hoverScrollPos;
     private ItemInfo hoveredItem;
     private ItemInfo focalItem;
+    private InventoryItem lastAltCard = null;
     private boolean panelOptionsCreated = false;
 
     private final List<ItemInfo> orderedItems = new ArrayList<>();
@@ -80,20 +82,17 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
             super(new FLabel.ButtonBuilder());
             setFocusable(false);
             updateToolTip();
-            setCommand(new Runnable() {
-                @Override
-                public void run() {
-                    if (groupBy == null || model.getItems().isEmpty()) { return; }
+            setCommand((Runnable) () -> {
+                if (groupBy == null || model.getItems().isEmpty()) { return; }
 
-                    boolean collapsed = !isAllCollapsed;
-                    for (Group group : groups) {
-                        group.isCollapsed = collapsed;
-                    }
-
-                    updateIsAllCollapsed();
-                    clearSelection(); //must clear selection since indices and visible items will be changing
-                    updateLayout(false);
+                boolean collapsed = !isAllCollapsed;
+                for (Group group : groups) {
+                    group.isCollapsed = collapsed;
                 }
+
+                updateIsAllCollapsed();
+                clearSelection(); //must clear selection since indices and visible items will be changing
+                updateLayout(false);
             });
         }
 
@@ -153,44 +152,33 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
 
         SItemManagerUtil.populateImageViewOptions(itemManager0, cbGroupByOptions, cbPileByOptions);
 
-        for (Integer i = MIN_COLUMN_COUNT; i <= MAX_COLUMN_COUNT; i++) {
-            cbColumnCount.addItem(i);
-        }
+        IntStream.rangeClosed(MIN_COLUMN_COUNT, MAX_COLUMN_COUNT).forEach(cbColumnCount::addItem);
         cbGroupByOptions.setMaximumRowCount(cbGroupByOptions.getItemCount());
         cbPileByOptions.setMaximumRowCount(cbPileByOptions.getItemCount());
         cbColumnCount.setMaximumRowCount(cbColumnCount.getItemCount());
         cbColumnCount.setSelectedIndex(columnCount - MIN_COLUMN_COUNT);
 
-        cbGroupByOptions.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                focus();
-                if (cbGroupByOptions.getSelectedIndex() > 0) {
-                    setGroupBy((GroupDef) cbGroupByOptions.getSelectedItem());
-                }
-                else {
-                    setGroupBy(null);
-                }
+        cbGroupByOptions.addActionListener(e -> {
+            focus();
+            if (cbGroupByOptions.getSelectedIndex() > 0) {
+                setGroupBy((GroupDef) cbGroupByOptions.getSelectedItem());
+            }
+            else {
+                setGroupBy(null);
             }
         });
-        cbPileByOptions.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                focus();
-                if (cbPileByOptions.getSelectedIndex() > 0) {
-                    setPileBy((ColumnDef) cbPileByOptions.getSelectedItem());
-                }
-                else {
-                    setPileBy(null);
-                }
+        cbPileByOptions.addActionListener(e -> {
+            focus();
+            if (cbPileByOptions.getSelectedIndex() > 0) {
+                setPileBy((ColumnDef) cbPileByOptions.getSelectedItem());
+            }
+            else {
+                setPileBy(null);
             }
         });
-        cbColumnCount.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                focus();
-                setColumnCount(cbColumnCount.getSelectedItem());
-            }
+        cbColumnCount.addActionListener(e -> {
+            focus();
+            setColumnCount(cbColumnCount.getSelectedItem());
         });
 
         //setup display
@@ -277,12 +265,7 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
 
                 if (selectItem(e)) {
                     setLockHoveredItem(true); //lock hoveredItem while context menu open
-                    itemManager.showContextMenu(e, new Runnable() {
-                        @Override
-                        public void run() {
-                            setLockHoveredItem(false);
-                        }
-                    });
+                    itemManager.showContextMenu(e, () -> setLockHoveredItem(false));
                 }
             }
 
@@ -870,9 +853,7 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
     @Override
     public void selectAll() {
         clearSelection();
-        for (Integer i = 0; i < getCount(); i++) {
-            selectedIndices.add(i);
-        }
+        IntStream.range(0, getCount()).forEach(selectedIndices::add);
         updateSelection();
     }
 
@@ -1109,9 +1090,19 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
                         InventoryItem item = itemInfo.item;
                         itemInfo.alt = false;
                         if (!FModel.getPreferences().getPref(FPref.UI_SWITCH_STATES_DECKVIEW).equals(ForgeConstants.SWITCH_CARDSTATES_DECK_NEVER)) {
-                            if (hoveredItem != null && hoveredItem.item.equals(item)) {
-                                if (item instanceof PaperCard && ((PaperCard)item).hasBackFace())
-                                    itemInfo.alt = true;
+                            if ((hoveredItem == null || !hoveredItem.item.equals(item)) || (FModel.getPreferences().getPref(FPref.UI_SWITCH_STATES_DECKVIEW).equals(ForgeConstants.SWITCH_CARDSTATES_DECK_ALWAYS))) {
+                                if (item instanceof PaperCard) {
+                                    if (((PaperCard)item).hasBackFace()) {
+                                        if (item.equals(lastAltCard)) {
+                                            itemInfo.alt = true;
+                                            lastAltCard = null;
+                                        } else {
+                                            lastAltCard = item;
+                                        }
+                                    } else {
+                                        lastAltCard = null;
+                                    }
+                                }
                             }
                         }
 
@@ -1127,12 +1118,7 @@ public class ImageView<T extends InventoryItem> extends ItemView<T> {
             }
 
             if (lockInput) { //unlock input after repaint finishes if needed
-                SwingUtilities.invokeLater(new Runnable() {
-                    @Override
-                    public void run() {
-                        lockInput = false;
-                    }
-                });
+                SwingUtilities.invokeLater(() -> lockInput = false);
             }
         }
 

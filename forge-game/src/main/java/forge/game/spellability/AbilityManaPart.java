@@ -17,14 +17,9 @@
  */
 package forge.game.spellability;
 
-import java.util.List;
-import java.util.Map;
-
-import org.apache.commons.lang3.StringUtils;
-
 import com.google.common.collect.Lists;
-
 import forge.card.ColorSet;
+import forge.card.GamePieceType;
 import forge.card.MagicColor;
 import forge.card.mana.ManaAtom;
 import forge.card.mana.ManaCostShard;
@@ -32,10 +27,12 @@ import forge.game.Game;
 import forge.game.GameActionUtil;
 import forge.game.IHasSVars;
 import forge.game.ability.AbilityKey;
+import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
 import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
 import forge.game.card.CardUtil;
+import forge.game.cost.Cost;
 import forge.game.mana.Mana;
 import forge.game.mana.ManaPool;
 import forge.game.player.Player;
@@ -46,9 +43,13 @@ import forge.game.replacement.ReplacementType;
 import forge.game.trigger.Trigger;
 import forge.game.trigger.TriggerHandler;
 import forge.game.trigger.TriggerType;
-import forge.game.zone.ZoneType;
 import forge.game.zone.Zone;
+import forge.game.zone.ZoneType;
 import forge.util.TextUtil;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * <p>
@@ -82,14 +83,10 @@ public class AbilityManaPart implements java.io.Serializable {
 
     // Spells paid with this mana spell can't be countered.
 
-
     /**
      * <p>
      * Dev Mode Constructor for AbilityMana.
      * </p>
-     *
-     * @param sourceCard
-     *            a {@link forge.game.card.Card} object.
      */
     public AbilityManaPart(final SpellAbility sourceSA, final Map<String, String> params) {
         this(sourceSA.getHostCard(), params);
@@ -108,6 +105,20 @@ public class AbilityManaPart implements java.io.Serializable {
         this.addsCounters = params.get("AddsCounters");
         this.triggersWhenSpent = params.get("TriggersWhenSpent");
         this.persistentMana = null != params.get("PersistentMana") && "True".equalsIgnoreCase(params.get("PersistentMana"));
+    }
+
+    public AbilityManaPart(final Card newSource, AbilityManaPart oldMana) {
+        this.sourceCard = newSource;
+        this.origProduced = oldMana.origProduced;
+        this.manaRestrictions = oldMana.manaRestrictions;
+        this.cannotCounterSpell = oldMana.cannotCounterSpell;
+        this.addsKeywords = oldMana.addsKeywords;
+        this.addsKeywordsType = oldMana.addsKeywordsType;
+        this.addsKeywordsUntil = oldMana.addsKeywordsUntil;
+        this.addsCounters = oldMana.addsCounters;
+        this.triggersWhenSpent = oldMana.triggersWhenSpent;
+        this.persistentMana = oldMana.persistentMana;
+        // Do we need to copy over last mana produced somehow? Its kinda gross
     }
 
     /**
@@ -233,13 +244,13 @@ public class AbilityManaPart implements java.io.Serializable {
     public void addNoCounterEffect(SpellAbility saBeingPaid) {
         final Game game = sourceCard.getGame();
         final Card eff = new Card(game.nextCardId(), game);
-        eff.setTimestamp(game.getNextTimestamp());
+        eff.setGameTimestamp(game.getNextTimestamp());
         eff.setName(sourceCard + "'s Effect");
         eff.setOwner(sourceCard.getController());
 
         eff.setImageKey(sourceCard.getImageKey());
         eff.setColor(MagicColor.COLORLESS);
-        eff.setImmutable(true);
+        eff.setGamePieceType(GamePieceType.EFFECT);
 
         String cantcounterstr = "Event$ Counter | ValidCard$ Card.IsRemembered | Description$ That spell can't be countered.";
         ReplacementEffect re = ReplacementHandler.parseReplacement(cantcounterstr, eff, true);
@@ -250,10 +261,7 @@ public class AbilityManaPart implements java.io.Serializable {
 
         SpellAbilityEffect.addForgetOnMovedTrigger(eff, "Stack");
 
-        game.getTriggerHandler().suppressMode(TriggerType.ChangesZone);
-        game.getAction().moveTo(ZoneType.Command, eff, null, null);
-        eff.updateStateForView();
-        game.getTriggerHandler().clearSuppression(TriggerType.ChangesZone);
+        game.getAction().moveToCommand(eff, null);
     }
 
     /**
@@ -326,6 +334,10 @@ public class AbilityManaPart implements java.io.Serializable {
         handler.registerOneTrigger(trig);
     }
 
+    public SpellAbility getSourceSA() {
+        return sVarHolder instanceof SpellAbility ? (SpellAbility) sVarHolder : null;
+    }
+
     /**
      * <p>
      * getManaRestrictions.
@@ -371,24 +383,27 @@ public class AbilityManaPart implements java.io.Serializable {
             }
 
             if (restriction.equals("CumulativeUpkeep")) {
-                if (sa.isCumulativeupkeep()) {
+                if (sa.isCumulativeUpkeep()) {
                     return true;
                 }
                 continue;
             }
 
             if (restriction.startsWith("CostContains")) {
-                if (restriction.endsWith("X") && sa.costHasManaX()) {
+                Game game = sa.getHostCard().getGame();
+                Cost payment = sa.getPayCosts();
+                if (game.getStack().isResolving() && sa.hasParam("UnlessCost")) {
+                    payment = AbilityUtils.calculateUnlessCost(sa, sa.getParam("UnlessCost"), false);
+                }
+                if (payment.hasNoManaCost()) {
+                    continue;
+                }
+                // TODO Thassa's Intervention with "twice {X}" is tricky
+                // TODO Volcano Hellion can't be handled without refactor to just have it passed down directly
+                if (restriction.endsWith("X") && payment.getCostMana().getAmountOfX() > 0) {
                     return true;
                 }
-                if (restriction.endsWith("C") && sa.getPayCosts().hasManaCost() && sa.getPayCosts().getCostMana().getMana().getShardCount(ManaCostShard.COLORLESS) > 0) {
-                    return true;
-                }
-                continue;
-            }
-
-            if (restriction.equals("Disturb")) {
-                if (sa.isDisturb()) {
+                if (restriction.endsWith("C") && payment.getCostMana().getMana().getShardCount(ManaCostShard.COLORLESS) > 0) {
                     return true;
                 }
                 continue;
@@ -426,6 +441,7 @@ public class AbilityManaPart implements java.io.Serializable {
                 return !sa.isSpell() || sa.getHostCard().isArtifact();
             }
 
+            // TODO refactor to differ between ForCost and ForEffect
             // the payment is for a resolving SA, currently no other restrictions would allow that
             if (getSourceCard().getGame().getStack().getInstanceMatchingSpellAbilityID(sa.getRootAbility()) != null) {
                 return false;
@@ -638,6 +654,28 @@ public class AbilityManaPart implements java.io.Serializable {
         if (origProduced.contains("Chosen")) {
             origProduced = origProduced.replace("Chosen", getChosenColor(sa));
         }
+        if (origProduced.contains("NotedColors")) {
+            // Should only be used for Paliano, the High City
+            if (sa.getActivatingPlayer() == null) {
+                return "";
+            }
+
+            String colors = sa.getActivatingPlayer().getDraftNotes().get("Paliano, the High City");
+            if (colors == null) {
+                return "";
+            }
+            // Colors here is an comma separated color list, potentially with duplicates
+            // We need to remove duplicates and convert to single letters
+            StringBuilder sb = new StringBuilder();
+            for (String color : colors.split(",")) {
+                String shortColor = MagicColor.toShortString(color);
+                if (sb.indexOf(shortColor) == -1) {
+                    sb.append(shortColor).append(" ");
+                }
+            }
+            origProduced = origProduced.replace("NotedColors", sb.toString().trim());
+        }
+
         if (!origProduced.contains("ColorIdentity")) {
             return TextUtil.fastReplace(origProduced, "Combo ", "");
         }

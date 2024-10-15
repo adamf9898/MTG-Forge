@@ -49,14 +49,17 @@ public class GameStateEvaluator {
         if (evalGame.getPhaseHandler().getPlayerTurn().getCreaturesInPlay().isEmpty()) {
             return null;
         }
+
+        Game gameCopy;
         GameCopier copier = new GameCopier(evalGame);
-        Game gameCopy = copier.makeCopy(null, aiPlayer);
-        gameCopy.getPhaseHandler().devAdvanceToPhase(PhaseType.COMBAT_DAMAGE, new Runnable() {
-            @Override
-            public void run() {
-                GameSimulator.resolveStack(gameCopy, aiPlayer.getWeakestOpponent());
-            }
-        });
+
+        if (evalGame.EXPERIMENTAL_RESTORE_SNAPSHOT) {
+            gameCopy = copier.makeCopy();
+        } else {
+            gameCopy = copier.makeCopy(null, aiPlayer);
+        }
+
+        gameCopy.getPhaseHandler().devAdvanceToPhase(PhaseType.COMBAT_DAMAGE, () -> GameSimulator.resolveStack(gameCopy, aiPlayer.getWeakestOpponent()));
         CombatSimResult result = new CombatSimResult();
         result.copier = copier;
         result.gameCopy = gameCopy;
@@ -257,7 +260,10 @@ public class GameStateEvaluator {
         // The value should be more than the value of having a card in hand, so if a land has an
         // activated ability but not a mana ability, it will still be played.
         for (SpellAbility m: c.getNonManaAbilities()) {
-            if (!m.getPayCosts().hasTapCost()) {
+            if (m.isLandAbility()) {
+                // Land Ability has no extra Score
+                continue;
+            } if (!m.getPayCosts().hasTapCost()) {
                 // probably a manland, rate it higher than a rainbow land
                 value += 25;
             } else if (m.getPayCosts().hasSpecificCostType(CostSacrifice.class)) {

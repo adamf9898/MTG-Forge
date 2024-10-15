@@ -5,7 +5,9 @@ import forge.StaticData;
 import forge.card.CardDb;
 import forge.card.CardRules;
 import forge.card.CardSplitType;
+import forge.item.IPaperCard;
 import forge.item.PaperCard;
+import org.apache.commons.lang3.StringUtils;
 
 public class ImageUtil {
     public static float getNearestHQSize(float baseSize, float actualSize) {
@@ -73,7 +75,7 @@ public class ImageUtil {
         final boolean hasManyPictures;
         final CardDb db =  !card.isVariant() ? StaticData.instance().getCommonCards() : StaticData.instance().getVariantCards();
         if (includeSet) {
-            cntPictures = db.getArtCount(card.getName(), edition);
+            cntPictures = db.getArtCount(card.getName(), edition, cp.getFunctionalVariant());
             hasManyPictures = cntPictures > 1;
         } else {
             cntPictures = 1;
@@ -148,6 +150,8 @@ public class ImageUtil {
             }
         } else if (CardSplitType.Split == cp.getRules().getSplitType()) {
             return card.getMainPart().getName() + card.getOtherPart().getName();
+        } else if (!IPaperCard.NO_FUNCTIONAL_VARIANT.equals(cp.getFunctionalVariant())) {
+            return cp.getName() + " " + cp.getFunctionalVariant();
         }
         return cp.getName();
     }
@@ -200,6 +204,7 @@ public class ImageUtil {
     }
 
     public static String toMWSFilename(String in) {
+        in = StringUtils.stripAccents(in);
         final StringBuilder out = new StringBuilder();
         char c;
         for (int i = 0; i < in.length(); i++) {

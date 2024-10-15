@@ -28,7 +28,7 @@ public class TriggerMilledAll extends Trigger {
      * @param intrinsic
      *            the intrinsic
      */
-    public TriggerMilledAll (final Map<String, String> params, final Card host, final boolean intrinsic) {
+    public TriggerMilledAll(final Map<String, String> params, final Card host, final boolean intrinsic) {
         super(params, host, intrinsic);
     }
 
@@ -36,9 +36,6 @@ public class TriggerMilledAll extends Trigger {
      * @param runParams*/
     @Override
     public final boolean performTest(final Map<AbilityKey, Object> runParams) {
-        if (!matchesValidParam("ValidPlayer", runParams.get(AbilityKey.Player))) {
-            return false;
-        }
         if (!matchesValidParam("ValidCard", runParams.get(AbilityKey.Cards))) {
             return false;
         }
@@ -57,14 +54,13 @@ public class TriggerMilledAll extends Trigger {
         }
 
         sa.setTriggeringObject(AbilityKey.Cards, cards);
-        sa.setTriggeringObjectsFrom(runParams, AbilityKey.Player);
+        sa.setTriggeringObject(AbilityKey.Amount, cards.size());
     }
 
     @Override
     public String getImportantStackObjects(SpellAbility sa) {
         StringBuilder sb = new StringBuilder();
-        sb.append(Localizer.getInstance().getMessage("lblPlayer")).append(": ");
-        sb.append(sa.getTriggeringObject(AbilityKey.Player));
+        sb.append(Localizer.getInstance().getMessage("lblAmount")).append(": ").append(sa.getTriggeringObject(AbilityKey.Amount));
         return sb.toString();
     }
 }

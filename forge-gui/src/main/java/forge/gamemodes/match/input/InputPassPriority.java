@@ -23,7 +23,9 @@ import java.util.List;
 import forge.game.Game;
 import forge.game.card.Card;
 import forge.game.player.Player;
-import forge.game.spellability.LandAbility;
+import forge.game.player.PlayerController;
+import forge.game.player.actions.PassPriorityAction;
+
 import forge.game.spellability.SpellAbility;
 import forge.localinstance.properties.ForgePreferences.FPref;
 import forge.model.FModel;
@@ -70,11 +72,9 @@ public class InputPassPriority extends InputSyncronizedBase {
     /** {@inheritDoc} */
     @Override
     protected final void onOk() {
-        passPriority(new Runnable() {
-            @Override
-            public void run() {
-                stop();
-            }
+        passPriority(() -> {
+            getController().macros().addRememberedAction(new PassPriorityAction());
+            stop();
         });
     }
 
@@ -83,12 +83,9 @@ public class InputPassPriority extends InputSyncronizedBase {
     protected final void onCancel() {
         if (!getController().tryUndoLastAction()) { //undo if possible
             //otherwise end turn
-            passPriority(new Runnable() {
-                @Override
-                public void run() {
-                    getController().autoPassUntilEndOfTurn();
-                    stop();
-                }
+            passPriority(() -> {
+                getController().autoPassUntilEndOfTurn();
+                stop();
             });
         }
     }
@@ -105,17 +102,15 @@ public class InputPassPriority extends InputSyncronizedBase {
             if (game.getStack().isEmpty()) { //phase can't end right now if stack isn't empty
                 Player player = game.getPhaseHandler().getPriorityPlayer();
                 if (player != null && player.getManaPool().willManaBeLostAtEndOfPhase() && player.getLobbyPlayer() == GamePlayerUtil.getGuiPlayer()) {
-                    ThreadUtil.invokeInGameThread(new Runnable() { //must invoke in game thread so dialog can be shown on mobile game
-                        @Override
-                        public void run() {
-                            Localizer localizer = Localizer.getInstance();
-                            String message = localizer.getMessage("lblYouHaveManaFloatingInYourManaPoolCouldBeLostIfPassPriority");
-                            if (player.getManaPool().hasBurn()) {
-                                message += " " + localizer.getMessage("lblYouWillTakeManaBurnDamageEqualAmountFloatingManaLostThisWay");
-                            }
-                            if (getController().getGui().showConfirmDialog(message, localizer.getMessage("lblManaFloating"), localizer.getMessage("lblOk"), localizer.getMessage("lblCancel"))) {
-                                runnable.run();
-                            }
+                    //must invoke in game thread so dialog can be shown on mobile game
+                    ThreadUtil.invokeInGameThread(() -> {
+                        Localizer localizer = Localizer.getInstance();
+                        String message = localizer.getMessage("lblYouHaveManaFloatingInYourManaPoolCouldBeLostIfPassPriority");
+                        if (player.getManaPool().hasBurn()) {
+                            message += " " + localizer.getMessage("lblYouWillTakeManaBurnDamageEqualAmountFloatingManaLostThisWay");
+                        }
+                        if (getController().getGui().showConfirmDialog(message, localizer.getMessage("lblManaFloating"), localizer.getMessage("lblOK"), localizer.getMessage("lblCancel"))) {
+                            runnable.run();
                         }
                     });
                     return;
@@ -126,6 +121,14 @@ public class InputPassPriority extends InputSyncronizedBase {
     }
 
     public List<SpellAbility> getChosenSa() { return chosenSa; }
+
+    @Override
+    protected final void onPlayerSelected(Player selected, final ITriggerEvent triggerEvent) {
+        PlayerController pc = selected.getController();
+        if (pc.isGuiPlayer()) {
+           pc.setFullControl(!pc.isFullControl());
+        }
+    }
 
     @Override
     protected boolean onCardSelected(final Card card, final List<Card> otherCardsToSelect, final ITriggerEvent triggerEvent) {
@@ -166,7 +169,7 @@ public class InputPassPriority extends InputSyncronizedBase {
         if (sa.isSpell()) {
             return Localizer.getInstance().getMessage("lblCastSpell");
         }
-        if (sa instanceof LandAbility) {
+        if (sa.isLandAbility()) {
             return Localizer.getInstance().getMessage("lblPlayLand");
         }
         return Localizer.getInstance().getMessage("lblActivateAbility");

@@ -6,6 +6,7 @@ import java.util.Map;
 import com.google.common.collect.Maps;
 
 import forge.game.Game;
+import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
@@ -119,8 +120,8 @@ public class DigMultipleEffect extends SpellAbilityEffect {
                     final PlayerZone zone = c.getOwner().getZone(destZone1);
 
                     if (!sa.hasParam("ChangeLater")) {
-                        if (zone.is(ZoneType.Library) || zone.is(ZoneType.PlanarDeck) || zone.is(ZoneType.SchemeDeck)) {
-                            c = game.getAction().moveTo(destZone1, c, libraryPosition, sa);
+                        if (zone.getZoneType().isDeck()) {
+                            c = game.getAction().moveTo(destZone1, c, libraryPosition, sa, AbilityKey.newMap());
                         } else {
                             if (destZone1.equals(ZoneType.Battlefield)) {
                                 if (sa.hasParam("Tapped")) {
@@ -152,8 +153,7 @@ public class DigMultipleEffect extends SpellAbilityEffect {
 
             // now, move the rest to destZone2
             if (!sa.hasParam("ChangeLater")) {
-                if (destZone2 == ZoneType.Library || destZone2 == ZoneType.PlanarDeck
-                        || destZone2 == ZoneType.SchemeDeck || destZone2 == ZoneType.Graveyard) {
+                if (destZone2.isDeck() || destZone2 == ZoneType.Graveyard) {
                     CardCollection afterOrder = rest;
                     if (sa.hasParam("RestRandomOrder")) {
                         CardLists.shuffle(afterOrder);
@@ -164,15 +164,14 @@ public class DigMultipleEffect extends SpellAbilityEffect {
                     }
                     for (final Card c : afterOrder) {
                         final ZoneType origin = c.getZone().getZoneType();
-                        Card m = game.getAction().moveTo(destZone2, c, libraryPosition2, sa);
+                        Card m = game.getAction().moveTo(destZone2, c, libraryPosition2, sa, AbilityKey.newMap());
                         if (m != null && !origin.equals(m.getZone().getZoneType())) {
                             table.put(origin, m.getZone().getZoneType(), m);
                         }
                     }
                 } else {
                     // just move them randomly
-                    for (int i = 0; i < rest.size(); i++) {
-                        Card c = rest.get(i);
+                    for (Card c : rest) {
                         final ZoneType origin = c.getZone().getZoneType();
                         final PlayerZone toZone = c.getOwner().getZone(destZone2);
                         c = game.getAction().moveTo(toZone, c, sa);
@@ -183,9 +182,7 @@ public class DigMultipleEffect extends SpellAbilityEffect {
                 }
             }
             if (sa.hasParam("ImprintRest")) {
-                for (Card c : rest) {
-                    host.addImprintedCard(c);
-                }
+                host.addImprintedCards(rest);
             }
         }
         //table trigger there

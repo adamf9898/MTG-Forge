@@ -13,6 +13,7 @@ import forge.adventure.util.Config;
 import forge.adventure.util.Current;
 import forge.adventure.util.Reward;
 import forge.card.CardEdition;
+import forge.card.PrintSheet;
 import forge.deck.Deck;
 import forge.game.GameType;
 import forge.gamemodes.limited.BoosterDraft;
@@ -302,11 +303,11 @@ public class AdventureEventData implements Serializable {
     public static Predicate<CardEdition> selectSetPool() {
         final int rollD100 = MyRandom.getRandom().nextInt(100);
         Predicate<CardEdition> rolledFilter;
-        if (rollD100 < 40) {
+        if (rollD100 < 30) {
             rolledFilter = filterStandard;
-        } else if (rollD100 < 70) {
+        } else if (rollD100 < 60) {
             rolledFilter = filterPioneer;
-        } else if (rollD100 < 90) {
+        } else if (rollD100 < 80) {
             rolledFilter = filterModern;
         } else {
             rolledFilter = filterVintage;
@@ -349,15 +350,37 @@ public class AdventureEventData implements Serializable {
                     for (Pair<String, Integer> slot : slots) {
                         boosterSize += slot.getRight();
                     }
-                    isOkay = boosterSize == 15;
+                    isOkay = boosterSize > 11;
+                }
+                for (PrintSheet ps : c.getPrintSheetsBySection()) {
+                    //exclude block with sets containing P9 cards..
+                    if (ps.containsCardNamed("Black Lotus", 1)
+                            || ps.containsCardNamed("Mox Emerald", 1)
+                            || ps.containsCardNamed("Mox Pearl", 1)
+                            || ps.containsCardNamed("Mox Ruby", 1)
+                            || ps.containsCardNamed("Mox Sapphire", 1)
+                            || ps.containsCardNamed("Mox Jet", 1)
+                            || ps.containsCardNamed("Ancestral Recall", 1)
+                            || ps.containsCardNamed("Timetwister", 1)
+                            || ps.containsCardNamed("Time Walk", 1)) {
+                        isOkay = false;
+                        break;
+                    }
                 }
             }
-            if (isOkay)
+            if (isOkay) {
                 legalBlocks.add(b);
+            }
         }
 
-        for (String restricted : Config.instance().getConfigData().restrictedEditions) {
-            legalBlocks.removeIf(q -> q.getName().equals(restricted));
+        ConfigData configData = Config.instance().getConfigData();
+        if (configData.allowedEditions != null) {
+            List<String> allowed = Arrays.asList(configData.allowedEditions);
+            legalBlocks.removeIf(q -> !allowed.contains(q.getName()));
+        } else {
+            for (String restricted : configData.restrictedEditions) {
+                legalBlocks.removeIf(q -> q.getName().equals(restricted));
+            }
         }
         return legalBlocks.isEmpty() ? null : Aggregates.random(legalBlocks);
     }
@@ -371,8 +394,14 @@ public class AdventureEventData implements Serializable {
                 legalBlocks.add(b);
             }
         }
-        for (String restricted : Config.instance().getConfigData().restrictedEditions) {
-            legalBlocks.removeIf(q -> q.getName().equals(restricted));
+        ConfigData configData = Config.instance().getConfigData();
+        if (configData.allowedEditions != null) {
+            List<String> allowed = Arrays.asList(configData.allowedEditions);
+            legalBlocks.removeIf(q -> !allowed.contains(q.getName()));
+        } else {
+            for (String restricted : configData.restrictedEditions) {
+                legalBlocks.removeIf(q -> q.getName().equals(restricted));
+            }
         }
         return legalBlocks.isEmpty()?null:Aggregates.random(legalBlocks);
     }
@@ -404,6 +433,7 @@ public class AdventureEventData implements Serializable {
         participants = new AdventureEventParticipant[numberOfOpponents + 1];
 
         List<EnemyData> data = Aggregates.random(WorldData.getAllEnemies(), numberOfOpponents);
+        data.removeIf(q -> q.nextEnemy != null);
         for (int i = 0; i < numberOfOpponents; i++) {
             participants[i] = new AdventureEventParticipant().generate(data.get(i));
         }
@@ -569,7 +599,7 @@ public class AdventureEventData implements Serializable {
             } else {
                 description += "\n";
             }
-            description += String.format("Prizes\n3 round wins: 500 gold\n2 round wins: 200 gold\n1 round win: 100 gold\n");
+            description += "Prizes\n3 round wins: 500 gold\n2 round wins: 200 gold\n1 round win: 100 gold\n";
             description += "Finishing event will award an unsellable copy of each card in your Jumpstart deck.";
         }
         return description;

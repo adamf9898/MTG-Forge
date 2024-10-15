@@ -30,19 +30,21 @@ import com.google.common.collect.Maps;
 
 import forge.card.CardType;
 import forge.game.Game;
-import forge.game.GlobalRuleChange;
+import forge.game.ability.AbilityKey;
 import forge.game.ability.ApiType;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardLists;
 import forge.game.card.CardPredicates;
 import forge.game.card.CardPredicates.Presets;
+import forge.game.card.CardZoneTable;
 import forge.game.keyword.Keyword;
 import forge.game.keyword.KeywordInterface;
 import forge.game.player.Player;
 import forge.game.player.PlayerController.BinaryChoiceType;
 import forge.game.spellability.SpellAbility;
-import forge.game.staticability.StaticAbilityCantPhaseOut;
+import forge.game.staticability.StaticAbilityCantPhase;
+import forge.game.trigger.TriggerType;
 import forge.game.zone.ZoneType;
 
 /**
@@ -103,12 +105,7 @@ public class Untap extends Phase {
         return !c.isExertedBy(playerTurn);
     }
 
-    public static final Predicate<Card> CANUNTAP = new Predicate<Card>() {
-        @Override
-        public boolean apply(Card c) {
-            return canUntap(c);
-        }
-    };
+    public static final Predicate<Card> CANUNTAP = Untap::canUntap;
 
     /**
      * <p>
@@ -118,16 +115,17 @@ public class Untap extends Phase {
     private void doUntap() {
         final Player player = game.getPhaseHandler().getPlayerTurn();
         final Predicate<Card> tappedCanUntap = Predicates.and(Presets.TAPPED, CANUNTAP);
+        Map<Player, CardCollection> untapMap = Maps.newHashMap();
 
         CardCollection list = new CardCollection(player.getCardsIn(ZoneType.Battlefield));
-        for (Card c : list) {
-            c.setStartedTheTurnUntapped(c.isUntapped());
-        }
 
+        CardZoneTable triggerList = new CardZoneTable(game.getLastStateBattlefield(), game.getLastStateGraveyard());
         CardCollection bounceList = CardLists.getKeyword(list, "During your next untap step, as you untap your permanents, return CARDNAME to its owner's hand.");
         for (final Card c : bounceList) {
-            game.getAction().moveToHand(c, null);
+            Card moved = game.getAction().moveToHand(c, null);
+            triggerList.put(ZoneType.Battlefield, moved.getZone().getZoneType(), moved);
         }
+        triggerList.triggerChangesZoneAll(game, null);
         list.removeAll(bounceList);
 
         final Map<String, Integer> restrictUntap = Maps.newHashMap();
@@ -151,19 +149,18 @@ public class Untap extends Phase {
             }
         }
         final CardCollection untapList = new CardCollection(list);
-        final String[] restrict = restrictUntap.keySet().toArray(new String[restrictUntap.keySet().size()]);
-        list = CardLists.filter(list, new Predicate<Card>() {
-            @Override
-            public boolean apply(final Card c) {
-                if (!Untap.canUntap(c)) {
-                    return false;
-                }
-                return !c.isValid(restrict, player, null, null);
+        final String[] restrict = restrictUntap.keySet().toArray(new String[0]);
+        list = CardLists.filter(list, c -> {
+            if (!Untap.canUntap(c)) {
+                return false;
             }
+            return !c.isValid(restrict, player, null, null);
         });
 
         for (final Card c : list) {
-            optionalUntap(c);
+            if (optionalUntap(c)) {
+                untapMap.computeIfAbsent(player, i -> new CardCollection()).add(c);
+            }
         }
 
         // other players untapping during your untap phase
@@ -180,7 +177,10 @@ public class Untap extends Phase {
             if (cardWithKW.isExertedBy(player)) {
                 continue;
             }
-            cardWithKW.untap(true);
+            if (cardWithKW.untap(true)) {
+                untapMap.computeIfAbsent(cardWithKW.getController(),
+                        i -> new CardCollection()).add(cardWithKW);
+            }
         }
         // end other players untapping during your untap phase
 
@@ -201,7 +201,7 @@ public class Untap extends Phase {
             if (chosen != null) {
                 for (Entry<String, Integer> rest : restrictUntap.entrySet()) {
                     if (chosen.isValid(rest.getKey(), player, null, null)) {
-                        restrictUntap.put(rest.getKey(), rest.getValue().intValue() - 1);
+                        restrictUntap.put(rest.getKey(), rest.getValue() - 1);
                     }
                 }
                 restrictUntapped.add(chosen);
@@ -209,7 +209,9 @@ public class Untap extends Phase {
             }
         }
         for (Card c : restrictUntapped) {
-            optionalUntap(c);
+            if (optionalUntap(c)) {
+                untapMap.computeIfAbsent(player, i -> new CardCollection()).add(c);
+            }
         }
 
         // Remove temporary keywords
@@ -224,12 +226,15 @@ public class Untap extends Phase {
         
         // remove exerted flags from all things in play
         // even if they are not creatures
-        for (final Card c : game.getCardsInGame()) {
+        for (final Card c : game.getCardsIn(ZoneType.Battlefield)) {
             c.removeExertedBy(player);
-        } 
-    } // end doUntap
+        }
+        final Map<AbilityKey, Object> runParams = AbilityKey.newMap();
+        runParams.put(AbilityKey.Map, untapMap);
+        game.getTriggerHandler().runTrigger(TriggerType.UntapAll, runParams, false);
+    }
 
-    private static void optionalUntap(final Card c) {
+    private static boolean optionalUntap(final Card c) {
         boolean untap = true;
 
         if (c.hasKeyword("You may choose not to untap CARDNAME during your untap step.") && c.isTapped()) {
@@ -248,25 +253,34 @@ public class Untap extends Phase {
             untap = c.getController().getController().chooseBinary(new SpellAbility.EmptySa(c, c.getController()), prompt.toString(), BinaryChoiceType.UntapOrLeaveTapped, defaultChoice);
         }
         if (untap) {
-            c.untap(true);
+            if (!c.untap(true)) untap = false;
         }
+        return untap;
     }
 
-    private static void doPhasing(final Player turn) {
+    public static void doPhasing(final Player turn) {
         // Needs to include phased out cards
-        final List<Card> list = CardLists.filter(turn.getGame().getCardsIncludePhasingIn(ZoneType.Battlefield), new Predicate<Card>() {
+        final List<Card> list = CardLists.filter(turn.getGame().getCardsIncludePhasingIn(ZoneType.Battlefield),
+                c -> (c.isPhasedOut(turn) && c.isDirectlyPhasedOut())
+                        || (c.hasKeyword(Keyword.PHASING) && c.getController().equals(turn))
+        );
 
-            @Override
-            public boolean apply(final Card c) {
-                return (c.isPhasedOut(turn) && c.isDirectlyPhasedOut()) || (c.hasKeyword(Keyword.PHASING) && c.getController().equals(turn));
+        CardCollection toPhase = new CardCollection();
+        for (final Card tgtC : list) {
+            if (tgtC.isPhasedOut() && StaticAbilityCantPhase.cantPhaseIn(tgtC)) {
+                continue;
             }
-        });
-
+            if (!tgtC.isPhasedOut() && StaticAbilityCantPhase.cantPhaseOut(tgtC)) {
+                continue;
+            }
+            toPhase.add(tgtC);
+        }
         // If c has things attached to it, they phase out simultaneously, and
         // will phase back in with it
         // If c is attached to something, it will phase out on its own, and try
         // to attach back to that thing when it comes back
-        for (final Card c : list) {
+        CardCollection phasedOut = new CardCollection();
+        for (final Card c : toPhase) {
             if (c.isPhasedOut() && c.isDirectlyPhasedOut()) {
                 c.phase(true);
             } else if (c.hasKeyword(Keyword.PHASING)) {
@@ -274,12 +288,22 @@ public class Untap extends Phase {
                 // and indirectly, it just phases out indirectly.
                 if (c.isAttachment()) {
                     final Card ent = c.getAttachedTo();
-                    if (ent != null && list.contains(ent) && !StaticAbilityCantPhaseOut.cantPhaseOut(ent)) {
+                    if (ent != null && list.contains(ent) && !StaticAbilityCantPhase.cantPhaseOut(ent)) {
                         continue;
                     }
                 }
                 c.phase(true);
+                phasedOut.add(c);
             }
+        }
+        if (!phasedOut.isEmpty()) {
+            final Map<AbilityKey, Object> runParams = AbilityKey.newMap();
+            runParams.put(AbilityKey.Cards, phasedOut);
+            turn.getGame().getTriggerHandler().runTrigger(TriggerType.PhaseOutAll, runParams, false);
+        }
+        if (!toPhase.isEmpty()) {
+            // collect now before some zone change during Untap resets triggers
+            turn.getGame().getTriggerHandler().collectTriggerForWaiting();
         }
     }
 
@@ -289,9 +313,8 @@ public class Untap extends Phase {
         }
         final Game game = previous.getGame();
         List<Card> casted = game.getStack().getSpellsCastLastTurn();
-        boolean cantBeNight = game.getStaticEffects().getGlobalRuleChange(GlobalRuleChange.noNight);
 
-        if (game.isDay() && !cantBeNight && !Iterables.any(casted, CardPredicates.isController(previous))) {
+        if (game.isDay() && !Iterables.any(casted, CardPredicates.isController(previous))) {
             game.setDayTime(true);
         } else if (game.isNight() && CardLists.count(casted, CardPredicates.isController(previous)) > 1) {
             game.setDayTime(false);

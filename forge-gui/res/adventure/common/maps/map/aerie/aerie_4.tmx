@@ -24,23 +24,23 @@
  </layer>
  <layer id="2" name="Walls" width="30" height="17">
   <data encoding="base64" compression="zlib">
-   eJzd1VEORDAQBuCmHsu7BLfYOMy6Bo84FnbtKXYPhCAaqc4/E087yR+VMF8M0T5UqieSAuH2QK4vIqVe4XWeEd0LdVPLfM9HXw2AzXERE7URl2siNuVKTcpG3FzLzL0eWuZmnmf96iPn6uIjd7u+Wfyja8/5POvfdp44eiPuR/gt7zUKXNtuDc+rjdvk/q84ts/k7gsue3mnVbCuywAzua5tN+Y6lClxXffcsf9OzffKXQ==
+   eJzbwcPAsIMAliECk2oGMeqjeRkYdvHgxlG8hM0i1l4ZJDt3A2l8YCcRdpNiLzF2Ems3MfaSaicxdhOyl1w7CdlNjL2yZNoJAyZM1Lf3MhMCo4PtEghMbXvNsNg3nO1FDmf0sL4C5UtjMZsYe/dSmK72kGEvst313KTZV8uN3U5SyytS7MZnJ6n1Aja7QXFaygxhlzATZyep9iLbXceNGxOykxx7semhRv0LAIHByk4=
   </data>
  </layer>
  <layer id="7" name="Ornamental Walls" width="30" height="17">
   <data encoding="base64" compression="zlib">
-   eJxjYBi8wIKJgeEyHmzJRBs7rxAw9xKV7SbGTmrbTYqd1LKbHDupZfdAADM87kWXQ07XMGBCZ//C3ESuvfj8O1D2EiNHrr3XgPpmMJJmL3qZRi7AZzc2O0H5bhpQ/XUqpCli7Ka2nbjsBoVzKTOEXcJMGzuR7Z7OCMFmSGwYpoWdtAIAc1kqdw==
+   eJxjYBi8wIKJgeEyHmzJRBs7rxAw9xKV7SbGTmrbTYqd1LKbHDupYbcZDdIJpfaiyyGnaxgwobO7YW4i115yw5mW9hIjR66914D6ZjCSZi96mUYuwGc3NjtB+W4aUP11KqQpYuymtp247AaFcykzhF3CTBs7ke2ezgjBZkhsGKaFnbQCAI/GKq8=
   </data>
  </layer>
  <layer id="3" name="Clutter" width="30" height="17">
-  <properties>
-   <property name="spriteLayer" type="bool" value="true"/>
-  </properties>
   <data encoding="base64" compression="zlib">
    eJxjYCAOpEgicLIkKp+WgEkKgRmlUPm0Bv9V8fOpDfKAYZkPxAlAnAjESTQOWxjgAYYlLxD/A9r3H2QnlrBtEae+vcoSmHgwAhMm2pp/Gc18MwrtI1b/zgEKb1rYS4v0SQhcIxDO+Nw0jZGB4TqN09VIAaXMELqEmfZ2TWdEpdHFhwoAADvQFp0=
   </data>
  </layer>
  <layer id="8" name="AboveClutter" width="30" height="17">
+  <properties>
+   <property name="spriteLayer" type="bool" value="true"/>
+  </properties>
   <data encoding="base64" compression="zlib">
    eJxjYBgFgw0ckhgYexfwYIq9FaO/O2gBjhlC8Eixl80IgpHBcTq4A5u97EbY1dIa0MO/2ACyf38B8e+BccagALTy+wlDCIaBOBrZgw44jCB4qAMAghcPXA==
   </data>

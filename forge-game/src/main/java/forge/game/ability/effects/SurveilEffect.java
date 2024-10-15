@@ -33,13 +33,14 @@ public class SurveilEffect extends SpellAbilityEffect {
         if (sa.hasParam("Amount")) {
             num = AbilityUtils.calculateAmount(sa.getHostCard(), sa.getParam("Amount"), sa);
         }
+        if (num == 0) {
+            return;
+        }
 
         boolean isOptional = sa.hasParam("Optional");
 
-        CardZoneTable table = new CardZoneTable();
         Map<AbilityKey, Object> moveParams = AbilityKey.newMap();
-        moveParams.put(AbilityKey.LastStateBattlefield, sa.getLastStateBattlefield());
-        moveParams.put(AbilityKey.LastStateGraveyard, sa.getLastStateGraveyard());
+        final CardZoneTable table = AbilityKey.addCardZoneTableParams(moveParams, sa);
 
         for (final Player p : getTargetPlayers(sa)) {
             if (!p.isInGame()) {
@@ -49,7 +50,7 @@ public class SurveilEffect extends SpellAbilityEffect {
                 continue;
             }
 
-            p.surveil(num, sa, table, moveParams);
+            p.surveil(num, sa, moveParams);
         }
         table.triggerChangesZoneAll(sa.getHostCard().getGame(), sa);
     }

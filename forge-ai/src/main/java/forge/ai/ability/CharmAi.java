@@ -14,7 +14,6 @@ import forge.ai.SpellAbilityAi;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.effects.CharmEffect;
 import forge.game.card.Card;
-import forge.game.keyword.Keyword;
 import forge.game.player.Player;
 import forge.game.spellability.AbilitySub;
 import forge.game.spellability.SpellAbility;
@@ -37,25 +36,25 @@ public class CharmAi extends SpellAbilityAi {
             min = sa.hasParam("MinCharmNum") ? AbilityUtils.calculateAmount(source, sa.getParam("MinCharmNum"), sa) : num;
         }
 
-        // only randomize if not all possible together
-        if (num < choices.size() || source.hasKeyword(Keyword.ESCALATE)) {
-            Collections.shuffle(choices);
-        }
-
         boolean timingRight = sa.isTrigger(); //is there a reason to play the charm now?
 
         // Reset the chosen list otherwise it will be locked in forever by earlier calls
         sa.setChosenList(null);
+        sa.setSubAbility(null);
         List<AbilitySub> chosenList;
         
         if (!ai.equals(sa.getActivatingPlayer())) {
             // This branch is for "An Opponent chooses" Charm spells from Alliances
             // Current just choose the first available spell, which seem generally less disastrous for the AI.
-            //return choices.subList(0, 1);
             chosenList = choices.subList(1, choices.size());
         } else if ("Triskaidekaphobia".equals(ComputerUtilAbility.getAbilitySourceName(sa))) {
             chosenList = chooseTriskaidekaphobia(choices, ai);
         } else {
+            // only randomize if not all possible together
+            if (num < choices.size()) {
+                Collections.shuffle(choices);
+            }
+
             /*
              * The generic chooseOptionsAi uses canPlayAi() to determine good choices
              * which means most "bonus" effects like life-gain and random pumps will
@@ -67,13 +66,13 @@ public class CharmAi extends SpellAbilityAi {
              * minimum choice requirements with canPlayAi() alone.
              */
             chosenList = min > 1 ? chooseMultipleOptionsAi(choices, ai, min)
-                    : chooseOptionsAi(choices, ai, timingRight, num, min, sa.hasParam("CanRepeatModes"));
+                    : chooseOptionsAi(sa, choices, ai, timingRight, num, min);
         }
 
         if (chosenList.isEmpty()) {
             if (timingRight) {
                 // Set minimum choices for triggers where chooseMultipleOptionsAi() returns null
-                chosenList = chooseOptionsAi(choices, ai, true, num, min, sa.hasParam("CanRepeatModes"));
+                chosenList = chooseOptionsAi(sa, choices, ai, true, num, min);
                 if (chosenList.isEmpty() && min != 0) {
                     return false;
                 }
@@ -81,20 +80,43 @@ public class CharmAi extends SpellAbilityAi {
                 return false;
             }
         }
+
+        // store the choices so they'll get reused
         sa.setChosenList(chosenList);
+        if (sa.isSpell()) {
+            // prebuild chain to improve cost calculation accuracy
+            CharmEffect.chainAbilities(sa, chosenList);
+        }
 
         // prevent run-away activations - first time will always return true
         return MyRandom.getRandom().nextFloat() <= Math.pow(.6667, sa.getActivationsThisTurn());
     }
 
-    private List<AbilitySub> chooseOptionsAi(List<AbilitySub> choices, final Player ai, boolean isTrigger, int num,
-            int min, boolean allowRepeat) {
+    private List<AbilitySub> chooseOptionsAi(SpellAbility sa, List<AbilitySub> choices, final Player ai, boolean isTrigger, int num,
+            int min) {
         List<AbilitySub> chosenList = Lists.newArrayList();
         AiController aic = ((PlayerControllerAi) ai.getController()).getAi();
+        boolean allowRepeat = sa.hasParam("CanRepeatModes"); // FIXME: unused for now, the AI doesn't know how to effectively handle repeated choices
+
+        // Pawprint
+        final int pawprintLimit = sa.hasParam("Pawprint") ? AbilityUtils.calculateAmount(sa.getHostCard(), sa.getParam("Pawprint"), sa) : 0;
+        if (pawprintLimit > 0) {
+            Collections.reverse(choices); // try to pay for the more expensive subs first
+        }
+        int pawprintAmount = 0;
+
         // First pass using standard canPlayAi() for good choices
         for (AbilitySub sub : choices) {
             sub.setActivatingPlayer(ai, true);
             if (AiPlayDecision.WillPlay == aic.canPlaySa(sub)) {
+                if (pawprintLimit > 0) {
+                    int curPawprintAmount = AbilityUtils.calculateAmount(sub.getHostCard(), sub.getParamOrDefault("Pawprint", "0"), sub);
+                    if (pawprintAmount + curPawprintAmount > pawprintLimit) {
+                        continue;
+                    } else {
+                        pawprintAmount += curPawprintAmount;
+                    }
+                }
                 chosenList.add(sub);
                 if (chosenList.size() == num) {
                     return chosenList; // maximum choices reached

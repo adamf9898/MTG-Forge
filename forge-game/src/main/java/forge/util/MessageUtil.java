@@ -12,7 +12,7 @@ public class MessageUtil {
     private MessageUtil() { }
 
     public static String formatMessage(String message, Player player, Object related) {
-        if (related instanceof Player && message.indexOf("{player") >= 0) {
+        if (related instanceof Player && message.contains("{player")) {
             String noun = mayBeYou(player, related);
             message = TextUtil.fastReplace(TextUtil.fastReplace(message, "{player}", noun),"{player's}", Lang.getInstance().getPossesive(noun));
         }
@@ -20,7 +20,7 @@ public class MessageUtil {
     }
 
     public static String formatMessage(String message, PlayerView player, Object related) {
-        if (related instanceof PlayerView && message.indexOf("{player") >= 0) {
+        if (related instanceof PlayerView && message.contains("{player")) {
             String noun = mayBeYou(player, related);
             message = TextUtil.fastReplace(TextUtil.fastReplace(message, "{player}", noun),"{player's}", Lang.getInstance().getPossesive(noun));
         }
@@ -30,7 +30,7 @@ public class MessageUtil {
     // These are not much related to PlayerController
     public static  String formatNotificationMessage(SpellAbility sa, Player player, GameObject target, String value) {
         if (sa == null || sa.getApi() == null || sa.getHostCard() == null) {
-            return Localizer.getInstance().getMessage("lblResultIs", value);
+            return String.valueOf(value);
         }
         String choser = StringUtils.capitalize(mayBeYou(player, target));
         switch(sa.getApi()) {
@@ -38,13 +38,15 @@ public class MessageUtil {
             case ChooseDirection:
             case Clash:
             case DigMultiple:
+            case Seek:
                 return value;
             case ChooseColor:
+            case Mana:
                 return sa.hasParam("Random")
                         ? Localizer.getInstance().getMessage("lblRandomColorChosen", value)
                         : Localizer.getInstance().getMessage("lblPlayerPickedChosen", choser, value);
             case ChooseNumber:
-                if (sa.hasParam("SecretlyChoose")) {
+                if (sa.hasParam("Secretly")) {
                     return value;
                 }
                 return sa.hasParam("Random")
@@ -62,7 +64,8 @@ public class MessageUtil {
                         ? Localizer.getInstance().getMessage("lblPlayerFlipComesUpValue", Lang.getInstance().getPossesive(flipper), value)
                         : Localizer.getInstance().getMessage("lblPlayerActionFlip", flipper, Lang.joinVerb(flipper, value));
             case GenericChoice:
-                if (sa.hasParam("ShowChoice") && sa.getParam("ShowChoice").equals("Description")) {
+                if ((sa.hasParam("Secretly")) || 
+                    (sa.hasParam("ShowChoice") && sa.getParam("ShowChoice").equals("Description"))) {
                     return value;
                 }
             case Protection:
@@ -72,7 +75,7 @@ public class MessageUtil {
             case PutCounter:// For Clay Golem cost text
                 return value;
             case Vote:
-                if (sa.hasParam("Secret")) {
+                if (sa.hasParam("Secretly")) {
                     return value;
                 } else {
                     String chooser = StringUtils.capitalize(mayBeYou(player, target));

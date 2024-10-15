@@ -31,7 +31,6 @@ import forge.card.CardType;
 import forge.deck.CardArchetypeLDAGenerator;
 import forge.deck.CardRelationMatrixGenerator;
 import forge.deck.io.DeckPreferences;
-import forge.download.AutoUpdater;
 import forge.game.GameFormat;
 import forge.game.GameType;
 import forge.game.card.CardUtil;
@@ -102,7 +101,7 @@ public final class FModel {
     private static GameFormat.Collection formats;
     private static ItemPool<PaperCard> uniqueCardsNoAlt, allCardsNoAlt, planechaseCards, archenemyCards,
             brawlCommander, oathbreakerCommander, tinyLeadersCommander, commanderPool,
-            avatarPool, conspiracyPool, dungeonPool;
+            avatarPool, conspiracyPool, dungeonPool, attractionPool;
 
     public static void initialize(final IProgressBar progressBar, Function<ForgePreferences, Void> adjustPrefs) {
         //init version to log
@@ -110,9 +109,9 @@ public final class FModel {
         //Device
         if (GuiBase.isAndroid()) //todo get device on other mobile platforms
             System.out.println(GuiBase.getDeviceName() + " (RAM: " + GuiBase.getDeviceRAM() + "MB, Android " + GuiBase.getAndroidRelease() + " API Level " + GuiBase.getAndroidAPILevel() + ")");
-        else
-            System.out.println(System.getProperty("os.name") + " (" + System.getProperty("os.version") + " " + System.getProperty("os.arch") + ")");
-
+        else {
+            System.out.println(System.getProperty("os.name") + " (" + System.getProperty("os.version") + " " + System.getProperty("os.arch") + ")\n" + System.getProperty("java.vendor") + " (Java " + System.getProperty("java.runtime.version") + ", " + System.getProperty("java.vm.name") + ")");
+        }
         ImageKeys.initializeDirs(
                 ForgeConstants.CACHE_CARD_PICS_DIR, ForgeConstants.CACHE_CARD_PICS_SUBDIR,
                 ForgeConstants.CACHE_TOKEN_PICS_DIR, ForgeConstants.CACHE_ICON_PICS_DIR,
@@ -123,7 +122,7 @@ public final class FModel {
         // Instantiate preferences: quest and regular
         // Preferences are initialized first so that the splash screen can be translated.
         try {
-            preferences = new ForgePreferences();
+            preferences = GuiBase.getForgePrefs();
             if (adjustPrefs != null) {
                 adjustPrefs.apply(preferences);
             }
@@ -140,38 +139,31 @@ public final class FModel {
                 ProgressObserver.emptyObserver : new ProgressObserver() {
             @Override
             public void setOperationName(final String name, final boolean usePercents) {
-                FThreads.invokeInEdtLater(new Runnable() {
-                    @Override
-                    public void run() {
-                        progressBar.setDescription(name);
-                        progressBar.setPercentMode(usePercents);
-                    }
+                FThreads.invokeInEdtLater(() -> {
+                    progressBar.setDescription(name);
+                    progressBar.setPercentMode(usePercents);
                 });
             }
 
             @Override
             public void report(final int current, final int total) {
-                FThreads.invokeInEdtLater(new Runnable() {
-                    @Override
-                    public void run() {
-                        progressBar.setMaximum(total);
-                        progressBar.setValue(current);
-                    }
+                FThreads.invokeInEdtLater(() -> {
+                    progressBar.setMaximum(total);
+                    progressBar.setValue(current);
                 });
             }
         };
 
-        if (new AutoUpdater(true).attemptToUpdate()) {
-            //
-        }
+        //if (new AutoUpdater(true).attemptToUpdate()) {}
         // load types before loading cards
         loadDynamicGamedata();
 
         //load card database
+        // Lazy loading currently disabled
         final CardStorageReader reader = new CardStorageReader(ForgeConstants.CARD_DATA_DIR, progressBarBridge,
-                FModel.getPreferences().getPrefBoolean(FPref.LOAD_CARD_SCRIPTS_LAZILY));
+                false);
         final CardStorageReader tokenReader = new CardStorageReader(ForgeConstants.TOKEN_DATA_DIR, progressBarBridge,
-                FModel.getPreferences().getPrefBoolean(FPref.LOAD_CARD_SCRIPTS_LAZILY));
+                false);
         CardStorageReader customReader;
         try {
            customReader  = new CardStorageReader(ForgeConstants.USER_CUSTOM_CARDS_DIR, progressBarBridge, false);
@@ -250,12 +242,7 @@ public final class FModel {
         Spell.setPerformanceMode(preferences.getPrefBoolean(FPref.PERFORMANCE_MODE));
 
         if (progressBar != null) {
-            FThreads.invokeInEdtLater(new Runnable() {
-                @Override
-                public void run() {
-                    progressBar.setDescription(Localizer.getInstance().getMessage("splash.loading.decks"));
-                }
-            });
+            FThreads.invokeInEdtLater(() -> progressBar.setDescription(Localizer.getInstance().getMessage("splash.loading.decks")));
         }
 
         decks = new CardCollections();
@@ -278,10 +265,10 @@ public final class FModel {
 
         //preload AI profiles
         AiProfileUtil.loadAllProfiles(ForgeConstants.AI_PROFILE_DIR);
+        AiProfileUtil.setAiSideboardingMode(AiProfileUtil.AISideboardingMode.normalizedValueOf(FModel.getPreferences().getPref(FPref.MATCH_AI_SIDEBOARDING_MODE)));
 
         //generate Deck Gen matrix
-        if(!FModel.getPreferences().getPrefBoolean(FPref.LOAD_CARD_SCRIPTS_LAZILY)
-                &&FModel.getPreferences().getPrefBoolean(FPref.DECKGEN_CARDBASED)) {
+        if(FModel.getPreferences().getPrefBoolean(FPref.DECKGEN_CARDBASED)) {
             boolean commanderDeckGenMatrixLoaded=CardRelationMatrixGenerator.initialize();
             deckGenMatrixLoaded=CardArchetypeLDAGenerator.initialize();
             if(!commanderDeckGenMatrixLoaded){
@@ -296,6 +283,7 @@ public final class FModel {
         allCardsNoAlt = getAllCardsNoAlt();
         archenemyCards = getArchenemyCards();
         planechaseCards = getPlanechaseCards();
+        attractionPool = getAttractionPool();
         if (GuiBase.getInterface().isLibgdxPort()) {
             //preload mobile Itempool
             uniqueCardsNoAlt = getUniqueCardsNoAlt();
@@ -337,60 +325,65 @@ public final class FModel {
 
     public static ItemPool<PaperCard> getArchenemyCards() {
         if (archenemyCards == null)
-            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_SCHEME, PaperCard.FN_GET_RULES)), PaperCard.class);
+            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_SCHEME, PaperCard::getRules)), PaperCard.class);
         return archenemyCards;
     }
 
     public static ItemPool<PaperCard> getPlanechaseCards() {
         if (planechaseCards == null)
-            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_PLANE_OR_PHENOMENON, PaperCard.FN_GET_RULES)), PaperCard.class);
+            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_PLANE_OR_PHENOMENON, PaperCard::getRules)), PaperCard.class);
         return planechaseCards;
     }
 
     public static ItemPool<PaperCard> getBrawlCommander() {
         if (brawlCommander == null)
             return ItemPool.createFrom(getMagicDb().getCommonCards().getAllCardsNoAlt(Predicates.and(
-                    FModel.getFormats().get("Brawl").getFilterPrinted(), Predicates.compose(CardRulesPredicates.Presets.CAN_BE_BRAWL_COMMANDER, PaperCard.FN_GET_RULES))), PaperCard.class);
+                    FModel.getFormats().get("Brawl").getFilterPrinted(), Predicates.compose(CardRulesPredicates.Presets.CAN_BE_BRAWL_COMMANDER, PaperCard::getRules))), PaperCard.class);
         return brawlCommander;
     }
 
     public static ItemPool<PaperCard> getOathbreakerCommander() {
         if (oathbreakerCommander == null)
             return ItemPool.createFrom(getMagicDb().getCommonCards().getAllCardsNoAlt(Predicates.compose(Predicates.or(
-                    CardRulesPredicates.Presets.CAN_BE_OATHBREAKER, CardRulesPredicates.Presets.CAN_BE_SIGNATURE_SPELL), PaperCard.FN_GET_RULES)), PaperCard.class);
+                    CardRulesPredicates.Presets.CAN_BE_OATHBREAKER, CardRulesPredicates.Presets.CAN_BE_SIGNATURE_SPELL), PaperCard::getRules)), PaperCard.class);
         return oathbreakerCommander;
     }
 
     public static ItemPool<PaperCard> getTinyLeadersCommander() {
         if (tinyLeadersCommander == null)
-            return ItemPool.createFrom(getMagicDb().getCommonCards().getAllCardsNoAlt(Predicates.compose(CardRulesPredicates.Presets.CAN_BE_TINY_LEADERS_COMMANDER, PaperCard.FN_GET_RULES)), PaperCard.class);
+            return ItemPool.createFrom(getMagicDb().getCommonCards().getAllCardsNoAlt(Predicates.compose(CardRulesPredicates.Presets.CAN_BE_TINY_LEADERS_COMMANDER, PaperCard::getRules)), PaperCard.class);
         return tinyLeadersCommander;
     }
 
     public static ItemPool<PaperCard> getCommanderPool() {
         if (commanderPool == null)
-            return ItemPool.createFrom(getMagicDb().getCommonCards().getAllCardsNoAlt(Predicates.compose(CardRulesPredicates.Presets.CAN_BE_COMMANDER, PaperCard.FN_GET_RULES)), PaperCard.class);
+            return ItemPool.createFrom(getMagicDb().getCommonCards().getAllCardsNoAlt(Predicates.compose(CardRulesPredicates.Presets.CAN_BE_COMMANDER, PaperCard::getRules)), PaperCard.class);
         return commanderPool;
     }
 
     public static ItemPool<PaperCard> getAvatarPool() {
         if (avatarPool == null)
-            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_VANGUARD, PaperCard.FN_GET_RULES)), PaperCard.class);
+            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_VANGUARD, PaperCard::getRules)), PaperCard.class);
         return avatarPool;
     }
 
     public static ItemPool<PaperCard> getConspiracyPool() {
         if (conspiracyPool == null)
-            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_CONSPIRACY, PaperCard.FN_GET_RULES)), PaperCard.class);
+            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_CONSPIRACY, PaperCard::getRules)), PaperCard.class);
         return conspiracyPool;
     }
 
     public static ItemPool<PaperCard> getDungeonPool() {
         if (dungeonPool == null)
-            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_DUNGEON, PaperCard.FN_GET_RULES)), PaperCard.class);
+            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_DUNGEON, PaperCard::getRules)), PaperCard.class);
         return dungeonPool;
     }
 
+    public static ItemPool<PaperCard> getAttractionPool() {
+        if (attractionPool == null)
+            return ItemPool.createFrom(getMagicDb().getVariantCards().getAllCards(Predicates.compose(CardRulesPredicates.Presets.IS_ATTRACTION, PaperCard::getRules)), PaperCard.class);
+        return attractionPool;
+    }
     private static boolean keywordsLoaded = false;
 
     /**

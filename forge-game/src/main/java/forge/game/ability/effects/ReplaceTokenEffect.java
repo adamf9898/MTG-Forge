@@ -47,14 +47,14 @@ public class ReplaceTokenEffect extends SpellAbilityEffect {
         Map<AbilityKey, Object> originalParams =
                 (Map<AbilityKey, Object>) repSA.getReplacingObject(AbilityKey.OriginalParams);
 
-        // currently the only ones that changes the amount does double it
         if ("Amount".equals(sa.getParam("Type"))) {
+            final String mod = sa.getParamOrDefault("Amount", "Twice");
             for (Map.Entry<Card, Integer> e : table.row(affected).entrySet()) {
                 if (!sa.matchesValidParam("ValidCard", e.getKey())) {
                     continue;
                 }
-                // currently the amount is only doubled
-                table.put(affected, e.getKey(), e.getValue() * 2);
+                int newAmt = AbilityUtils.doXMath(e.getValue(), mod, card, sa);
+                table.put(affected, e.getKey(), newAmt);
             }
         } else if ("AddToken".equals(sa.getParam("Type"))) {
             long timestamp = game.getNextTimestamp();
@@ -129,6 +129,7 @@ public class ReplaceTokenEffect extends SpellAbilityEffect {
                     final Card token;
                     if (script.equals("Chosen")) {
                         token = CopyPermanentEffect.getProtoType(sa, chosen, pe.getKey());
+                        token.setCopiedPermanent(token);
                     } else {
                         token = TokenInfo.getProtoType(script, sa, pe.getKey());
                     }

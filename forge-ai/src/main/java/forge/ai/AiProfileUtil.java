@@ -47,6 +47,26 @@ public class AiProfileUtil {
     public static final String AI_PROFILE_RANDOM_MATCH = "Random (Every Match)";
     public static final String AI_PROFILE_RANDOM_DUEL = "Random (Every Game)";
 
+    public enum AISideboardingMode {
+        Off,
+        AI,
+        HumanForAI;
+
+        public static AISideboardingMode normalizedValueOf(String value) {
+            return valueOf(value.replace(" ", ""));
+        }
+    }
+
+    private static AISideboardingMode aiSideboardingMode = AISideboardingMode.Off;
+
+    public static AISideboardingMode getAISideboardingMode() {
+        return aiSideboardingMode;
+    }
+
+    public static void setAiSideboardingMode(AISideboardingMode mode) {
+        aiSideboardingMode = mode;
+    }
+
     /** Builds an AI profile file name with full relative 
      * path based on the profile name. 
      * @param profileName the name of the profile.
@@ -73,7 +93,7 @@ public class AiProfileUtil {
      * Load a single profile.
      * @param profileName a profile to load.
      */
-    private static final Map<AiProps, String> loadProfile(final String profileName) {
+    private static Map<AiProps, String> loadProfile(final String profileName) {
         Map<AiProps, String> profileMap = new HashMap<>();
 
         List<String> lines = FileUtil.readFile(buildFileName(profileName));
@@ -127,9 +147,9 @@ public class AiProfileUtil {
         if (children == null) {
             System.err.println("AIProfile > can't find AI profile directory!");
         } else {
-            for (int i = 0; i < children.length; i++) {
-                if (children[i].endsWith(AI_PROFILE_EXT)) {
-                    availableProfiles.add(children[i].substring(0, children[i].length() - AI_PROFILE_EXT.length()));
+            for (String child : children) {
+                if (child.endsWith(AI_PROFILE_EXT)) {
+                    availableProfiles.add(child.substring(0, child.length() - AI_PROFILE_EXT.length()));
                 }
             }
         }

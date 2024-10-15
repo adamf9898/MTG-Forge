@@ -5,6 +5,7 @@ import com.google.common.collect.Lists;
 import forge.card.CardRarity;
 import forge.card.CardRules;
 import forge.card.CardType.CoreType;
+import forge.card.ICardFace;
 import forge.card.MagicColor;
 import forge.util.PredicateCard;
 import forge.util.PredicateString;
@@ -21,6 +22,7 @@ public interface IPaperCard extends InventoryItem, Serializable {
     int DEFAULT_ART_INDEX = 1;
     int NO_ART_INDEX = -1;  // Placeholder when NO ArtIndex is Specified
     String NO_ARTIST_NAME = "";
+    String NO_FUNCTIONAL_VARIANT = "";
 
     /**
      * Number of filters based on CardPrinted values.
@@ -192,8 +194,7 @@ public interface IPaperCard extends InventoryItem, Serializable {
          * easier access from code.
          */
         public abstract static class Presets {
-            // Think twice before using these, since rarity is a prop of printed
-            // card.
+            // Think twice before using these, since rarity is a prop of printed card.
             /** The Constant isCommon. */
             public static final Predicate<PaperCard> IS_COMMON = Predicates.rarity(true, CardRarity.Common);
 
@@ -223,19 +224,8 @@ public interface IPaperCard extends InventoryItem, Serializable {
             public static final Predicate<PaperCard> IS_WHITE = Predicates.color(true, false, MagicColor.WHITE);
             public static final Predicate<PaperCard> IS_COLORLESS = Predicates.color(true, true, MagicColor.COLORLESS);
 
-            public static final Predicate<PaperCard> IS_UNREBALANCED = new Predicate<PaperCard>() {
-                @Override
-                public boolean apply(PaperCard input) {
-                    return input.isUnRebalanced();
-                }
-            };
-            public static final Predicate<PaperCard> IS_REBALANCED = new Predicate<PaperCard>() {
-
-                @Override
-                public boolean apply(PaperCard input) {
-                    return input.isRebalanced();
-                }
-            };
+            public static final Predicate<PaperCard> IS_UNREBALANCED = PaperCard::isUnRebalanced;
+            public static final Predicate<PaperCard> IS_REBALANCED = PaperCard::isRebalanced;
         }
     }
 
@@ -243,6 +233,7 @@ public interface IPaperCard extends InventoryItem, Serializable {
     String getName();
     String getEdition();
     String getCollectorNumber();
+    String getFunctionalVariant();
     int getArtIndex();
     boolean isFoil();
     boolean isToken();
@@ -251,6 +242,8 @@ public interface IPaperCard extends InventoryItem, Serializable {
     String getArtist();
     String getItemType();
     boolean hasBackFace();
+    ICardFace getMainFace();
+    ICardFace getOtherFace();
     String getCardImageKey();
     String getCardAltImageKey();
     String getCardWSpecImageKey();
@@ -259,5 +252,22 @@ public interface IPaperCard extends InventoryItem, Serializable {
     String getCardRSpecImageKey();
     String getCardGSpecImageKey();
 
-    public boolean isRebalanced();
+    boolean isRebalanced();
+
+    @Override
+    default String getTranslationKey() {
+        if(!NO_FUNCTIONAL_VARIANT.equals(getFunctionalVariant()))
+            return getName() + " $" + getFunctionalVariant();
+        return getName();
+    }
+
+    @Override
+    default String getUntranslatedType() {
+        return getRules().getType().toString();
+    }
+
+    @Override
+    default String getUntranslatedOracle() {
+        return getRules().getOracleText();
+    }
 }

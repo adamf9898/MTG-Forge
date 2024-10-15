@@ -1,7 +1,10 @@
 package forge.gui.card;
 
 import com.google.common.collect.Sets;
-import forge.card.*;
+import forge.card.CardRarity;
+import forge.card.CardStateName;
+import forge.card.ColorSet;
+import forge.card.MagicColor;
 import forge.card.mana.ManaCostShard;
 import forge.deck.DeckRecognizer;
 import forge.game.GameView;
@@ -9,6 +12,7 @@ import forge.game.card.Card;
 import forge.game.card.CardView;
 import forge.game.card.CardView.CardStateView;
 import forge.game.card.CounterType;
+import forge.game.player.PlayerView;
 import forge.game.zone.ZoneType;
 import forge.item.InventoryItemFromSet;
 import forge.item.PaperCard;
@@ -20,12 +24,14 @@ import forge.model.FModel;
 import forge.util.CardTranslation;
 import forge.util.Lang;
 import forge.util.Localizer;
+import forge.util.TextUtil;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class CardDetailUtil {
@@ -172,7 +178,7 @@ public class CardDetailUtil {
 
     public static String formatCardType(final CardStateView card, final boolean canShow) {
         boolean isInPlay = card.getCard() != null && ZoneType.Battlefield.equals(card.getCard().getZone());
-        String translatedtype = CardTranslation.getTranslatedType(card.getName(), card.getType().toString());
+        String translatedtype = CardTranslation.getTranslatedType(card);
         return canShow ? translatedtype : (card.getState() == CardStateName.FaceDown && isInPlay ? "Creature" : "");
     }
 
@@ -210,7 +216,21 @@ public class CardDetailUtil {
             ptText.append(card.getDefense());
         }
 
+        if (card.isAttraction()) {
+            ptText.append(Localizer.getInstance().getMessage("lblLights")).append(": ");
+            ptText.append(formatAttractionLights(card.getAttractionLights()));
+        }
+
         return ptText.toString();
+    }
+
+    public static String formatAttractionLights(Set<Integer> lights) {
+        return (lights.contains(1) ? "{AL1ON} " : "{AL1OFF} ") +
+                (lights.contains(2) ? "{AL2ON} " : "{AL2OFF} ") +
+                (lights.contains(3) ? "{AL3ON} " : "{AL3OFF} ") +
+                (lights.contains(4) ? "{AL4ON} " : "{AL4OFF} ") +
+                (lights.contains(5) ? "{AL5ON} " : "{AL5OFF} ") +
+                (lights.contains(6) ? "{AL6ON}" : "{AL6OFF}");
     }
 
     public static String formatCardId(final CardStateView card) {
@@ -299,8 +319,8 @@ public class CardDetailUtil {
                 needTranslation = false;
         }
         String text = !card.isSplitCard() ?
-            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(state.getName(), "") : null) :
-            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(card.getLeftSplitState().getName(), card.getRightSplitState().getName()) : null );
+            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(state) : null) :
+            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(card.getLeftSplitState(), card.getRightSplitState()) : null );
 
         // Bracket P/T for Level up
         if (text.contains("LEVEL")) {
@@ -344,25 +364,21 @@ public class CardDetailUtil {
             }
 
             for (final Entry<String, String> e : Sets.union(changedColorWords.entrySet(), changedTypes.entrySet())) {
-                // ignore lower case and plural form keys, to avoid duplicity
-                if (Character.isUpperCase(e.getKey().charAt(0))
-                        && !CardType.Constant.singularTypes.containsKey(e.getKey())) {
-                    area.append("Text changed: all instances of ");
-                    if (e.getKey().equals("Any")) {
-                        if (changedColorWords.containsKey(e.getKey())) {
-                            area.append("color words");
-                        } else if (forge.card.CardType.getBasicTypes().contains(e.getValue())) {
-                            area.append("basic land types");
-                        } else {
-                            area.append("creature types");
-                        }
+                area.append("Text changed: all instances of ");
+                if (e.getKey().equals("Any")) {
+                    if (changedColorWords.containsKey(e.getValue())) {
+                        area.append("color words");
+                    } else if (forge.card.CardType.getBasicTypes().contains(e.getValue())) {
+                        area.append("basic land types");
                     } else {
-                        area.append(e.getKey());
+                        area.append("creature types");
                     }
-                    area.append(" are replaced by ");
-                    area.append(e.getValue());
-                    area.append(".\n");
+                } else {
+                    area.append(e.getKey());
                 }
+                area.append(" are replaced by ");
+                area.append(e.getValue());
+                area.append(".\n");
             }
         }
 
@@ -377,7 +393,7 @@ public class CardDetailUtil {
         // counter text
         if (card.getCounters() != null) {
             for (final Entry<CounterType, Integer> c : card.getCounters().entrySet()) {
-                if (c.getValue().intValue() != 0) {
+                if (c.getValue() != 0) {
                     if (area.length() != 0) {
                         area.append("\n");
                     }
@@ -423,6 +439,31 @@ public class CardDetailUtil {
             area.append(state.getName()).append(" this turn.");
         }
 
+        // Draft keywords
+        if (card.getDraftAction() != null) {
+            for(final String draftAction : card.getDraftAction()) {
+                if (area.length() != 0) {
+                    area.append("\n");
+                }
+                area.append(TextUtil.fastReplace(draftAction, "CARDNAME", card.getName()));
+            }
+        }
+
+        // Draft notes
+        PlayerView pl = card.getController();
+        if (pl != null) {
+            Map<String, String> notes = pl.getDraftNotes();
+            if (notes != null) {
+                String note = notes.get(card.getName());
+                if (note != null) {
+                    if (area.length() != 0) {
+                        area.append("\n");
+                    }
+                    area.append("Draft Notes: ").append(note);
+                }
+            }
+        }
+
         // chosen type
         if (!card.getChosenType().isEmpty()) {
             if (area.length() != 0) {
@@ -461,19 +502,8 @@ public class CardDetailUtil {
             if (area.length() != 0) {
                 area.append("\n");
             }
-            area.append("(chosen cards: ");
-            if (card.isImmutable() && card.getName().contains("Perpetual Effect")) {
-                List<CardView> chosenToShow = new ArrayList<>();
-                for (CardView cc : card.getChosenCards()) {
-                    if (!cc.getZone().isHidden()) {
-                        chosenToShow.add(cc);
-                    }
-                }
-                area.append(Lang.joinHomogenous(chosenToShow));
-            } else {
-                area.append(Lang.joinHomogenous(card.getChosenCards()));
-            }
-            area.append(")");
+            area.append("(chosen card").append(card.getChosenCards().size() == 1 ? ": " : "s: ");
+            area.append(Lang.joinHomogenous(card.getChosenCards())).append(")");
         }
 
         // chosen number
@@ -482,6 +512,15 @@ public class CardDetailUtil {
                 area.append("\n");
             }
             area.append("(chosen number: ").append(card.getChosenNumber()).append(")");
+        }
+
+        // stored dice results
+        if (card.getStoredRolls() != null) {
+            if (area.length() != 0) {
+                area.append("\n");
+            }
+            area.append("(stored dice results: ").append(StringUtils.join(card.getStoredRolls(), ", "));
+            area.append(")");
         }
 
         // chosen player
@@ -540,7 +579,7 @@ public class CardDetailUtil {
         }
 
         // sector
-        if (!card.getSector().isEmpty()) {
+        if (card.getSector() != null && !card.getSector().isEmpty()) {
             if (area.length() != 0) {
                 area.append("\n");
             }

@@ -14,10 +14,7 @@ import forge.adventure.data.ItemData;
 import forge.adventure.stage.ConsoleCommandInterpreter;
 import forge.adventure.stage.GameHUD;
 import forge.adventure.stage.MapStage;
-import forge.adventure.util.Config;
-import forge.adventure.util.Controls;
-import forge.adventure.util.Current;
-import forge.adventure.util.Paths;
+import forge.adventure.util.*;
 import forge.deck.Deck;
 
 import java.util.HashMap;
@@ -76,7 +73,7 @@ public class InventoryScene extends UIScene {
                                 }
                             }
                             String item = Current.player().itemInSlot(slotName);
-                            if (item != null && !item.equals("")) {
+                            if (item != null && !item.isEmpty()) {
                                 Button changeButton = null;
                                 for (Button invButton : inventoryButtons) {
                                     if (itemLocation.get(invButton) != null && itemLocation.get(invButton).equals(item)) {
@@ -160,7 +157,21 @@ public class InventoryScene extends UIScene {
         if (data == null) return;
         Current.player().addShards(-data.shardsNeeded);
         done();
-        ConsoleCommandInterpreter.getInstance().command(data.commandOnUse);
+        if (data.commandOnUse != null && !data.commandOnUse.isEmpty())
+            ConsoleCommandInterpreter.getInstance().command(data.commandOnUse);
+        if (data.dialogOnUse != null && data.dialogOnUse.text != null && !data.dialogOnUse.text.isEmpty()) {
+            MapDialog dialog = new MapDialog(data.dialogOnUse, MapStage.getInstance(),0,null);
+            MapStage.getInstance().showDialog();
+            dialog.activate();
+            ChangeListener listen = new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent changeEvent, Actor actor) {
+                    AdventureQuestController.instance().showQuestDialogs(MapStage.getInstance());
+                }
+            };
+            dialog.addDialogCompleteListener(listen);
+        }
+        AdventureQuestController.instance().updateItemUsed(data);
     }
 
     private void openBooster() {
@@ -207,10 +218,13 @@ public class InventoryScene extends UIScene {
         }
     }
 
+    public void clearItemDescription() {
+        itemDescription.setText("");
+    }
     private void setSelected(Button actor) {
         selected = actor;
         if (actor == null) {
-            itemDescription.setText("");
+            clearItemDescription();
             deleteButton.setDisabled(true);
             equipButton.setDisabled(true);
             useButton.setDisabled(true);
@@ -235,7 +249,7 @@ public class InventoryScene extends UIScene {
             if (Current.player().getShards() < data.shardsNeeded)
                 useButton.setDisabled(true);
 
-            if (data.equipmentSlot == null || data.equipmentSlot.equals("")) {
+            if (data.equipmentSlot == null || data.equipmentSlot.isEmpty() || data.isCracked) {
                 equipButton.setDisabled(true);
             } else {
                 equipButton.setDisabled(false);
@@ -250,7 +264,8 @@ public class InventoryScene extends UIScene {
                     button.layout();
                 }
             }
-            itemDescription.setText(data.name + "\n[%98]" + data.getDescription());
+            String status = data.isCracked ? " (" + Forge.getLocalizer().getMessage("lblCracked") + ")" : "";
+            itemDescription.setText(data.name + status + "\n[%98]" + data.getDescription());
         }
         else if (deckLocation.containsKey(actor)){
             Deck data = (deckLocation.get(actor));
@@ -369,7 +384,7 @@ public class InventoryScene extends UIScene {
             if (slot.getValue().getChildren().size >= 2)
                 slot.getValue().removeActorAt(1, false);
             String equippedItem = Current.player().itemInSlot(slot.getKey());
-            if (equippedItem == null || equippedItem.equals(""))
+            if (equippedItem == null || equippedItem.isEmpty())
                 continue;
             ItemData item = ItemData.getItem(equippedItem);
             if (item != null) {

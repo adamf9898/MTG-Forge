@@ -242,7 +242,7 @@ public final class ManaCost implements Comparable<ManaCost>, Iterable<ManaCostSh
             if (this.hasNoCost) {
                 weight = -1; // for those who doesn't even have a 0 sign on card
             }
-            this.compareWeight = Float.valueOf(weight);
+            this.compareWeight = weight;
         }
         return this.compareWeight;
     }
@@ -319,9 +319,9 @@ public final class ManaCost implements Comparable<ManaCost>, Iterable<ManaCostSh
         return i;
     }
     
-    public boolean hasHybrid() {
+    public boolean hasMultiColor() {
         for (ManaCostShard shard : shards) {
-            if (shard.isHybrid()) {
+            if (shard.isMultiColor()) {
                 return true;
             }
         }

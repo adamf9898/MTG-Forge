@@ -1,7 +1,5 @@
 [metadata]
 Name=orc_brute
-[Avatar]
-
 [Main]
 2 Animate Dead|MB1|1
 2 Badlands|OLGC|1
@@ -25,17 +23,9 @@ Name=orc_brute
 3 Swamp|LTR|3
 3 Swamp|LTR|4
 2 Thrasher Brute|BBD|1
-2 Ugluk of the White Hand|LTR|1
+2 Uglúk of the White Hand|LTR|1
 1 Vengeful Warchief|M20|1
 2 Zurgo Bellstriker|DTK|1
 2 Zurgo Helmsmasher|KTK|1
 [Sideboard]
-
-[Planes]
-
 [Schemes]
-
-[Conspiracy]
-
-[Dungeon]
-

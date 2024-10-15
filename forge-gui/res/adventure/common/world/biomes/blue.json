@@ -28,10 +28,10 @@
 "enemies": [
 	"Adept Blue Wizard",
 	"Aether Channeler",
+	"Angelic Overseer",
 	"Apprentice Blue Wizard",
 	"Bird",
 	"Blue Sliver",
-	"Cephalid",
 	"Challenger 20",
 	"Challenger 21",
 	"Challenger 22",
@@ -46,7 +46,7 @@
 	"Geist",
 	"Geistmage",
 	"Gitaxian Underling",
-	"Homarid",
+	"Hermit Crab",
 	"Horror",
 	"Ibis",
 	"Ibis-headed Aven Initiate",
@@ -66,7 +66,6 @@
 	"Rogue",
 	"Scorpion",
 	"Sea Monster",
-	"Simic Wizard",
 	"Tarkir Djinn",
 	"Turtle",
 	"Walking Brain",
@@ -86,6 +85,7 @@
 	"MerfolkPool2",
 	"MerfolkPool3",
 	"MerfolkPool4",
+	"MerfolkPool5",
 	"DjinnPalace",
 	"DjinnPalace1",
 	"Factory",
@@ -108,13 +108,15 @@
 	"CaveU2",
 	"CaveU3",
 	"CaveU4",
+	"CaveAmphin",
 	"GitaxianLab",
 	"Kiora Island",
 	"Teferi Hideout",
 	"Jacehold",
 	"Skep",
 	"Dream Halls",
-	"Crawlspace"
+	"Crawlspace",
+	"Quest_LibraryOfVarsil"
 ],
 "structures": [
 	{

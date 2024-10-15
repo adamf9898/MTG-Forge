@@ -5,6 +5,7 @@ public interface ICostVisitor<T> {
     T visit(CostGainControl cost);
     T visit(CostChooseColor cost);
     T visit(CostChooseCreatureType cost);
+    T visit(CostCollectEvidence cost);
     T visit(CostDiscard cost);
     T visit(CostDamage cost);
     T visit(CostDraw cost);
@@ -14,6 +15,7 @@ public interface ICostVisitor<T> {
     T visit(CostExert cost);
     T visit(CostEnlist cost);
     T visit(CostFlipCoin cost);
+    T visit(CostForage cost);
     T visit(CostRollDice cost);
     T visit(CostMill cost);
     T visit(CostAddMana cost);
@@ -21,12 +23,13 @@ public interface ICostVisitor<T> {
     T visit(CostPayEnergy cost);
     T visit(CostGainLife cost);
     T visit(CostPartMana cost);
+    T visit(CostPromiseGift cost);
     T visit(CostPutCardToLib cost);
     T visit(CostTap cost);
     T visit(CostSacrifice cost);
     T visit(CostReturn cost);
     T visit(CostReveal cost);
-    T visit(CostRevealChosenPlayer cost);
+    T visit(CostRevealChosen cost);
     T visit(CostRemoveAnyCounter cost);
     T visit(CostRemoveCounter cost);
     T visit(CostPutCounter cost);
@@ -50,6 +53,11 @@ public interface ICostVisitor<T> {
 
         @Override
         public T visit(CostChooseCreatureType cost) {
+            return null;
+        }
+
+        @Override
+        public T visit(CostCollectEvidence cost) {
             return null;
         }
 
@@ -97,6 +105,10 @@ public interface ICostVisitor<T> {
         public T visit(CostFlipCoin cost) {
             return null;
         }
+        @Override
+        public T visit(CostForage cost) {
+            return null;
+        }
 
         @Override
         public T visit(CostRollDice cost) {
@@ -134,6 +146,9 @@ public interface ICostVisitor<T> {
         }
 
         @Override
+        public T visit(CostPromiseGift cost) { return null; }
+
+        @Override
         public T visit(CostPutCardToLib cost) {
             return null;
         }
@@ -159,7 +174,7 @@ public interface ICostVisitor<T> {
         }
 
         @Override
-        public T visit(CostRevealChosenPlayer cost) {
+        public T visit(CostRevealChosen cost) {
             return null;
         }
 
@@ -203,5 +218,4 @@ public interface ICostVisitor<T> {
             return null;
         }
     }
-
 }

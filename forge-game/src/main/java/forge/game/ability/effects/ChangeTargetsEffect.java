@@ -35,9 +35,10 @@ public class ChangeTargetsEffect extends SpellAbilityEffect {
     public void resolve(SpellAbility sa) {
         final List<SpellAbility> sas = getTargetSpells(sa);
         final Player activator = sa.getActivatingPlayer();
-        final Player chooser = sa.hasParam("Chooser") ? getDefinedPlayersOrTargeted(sa, "Chooser").get(0) : sa.getActivatingPlayer();
+        final Player chooser = sa.hasParam("Chooser") ? getDefinedPlayersOrTargeted(sa, "Chooser").get(0) : activator;
 
         final MagicStack stack = activator.getGame().getStack();
+        
         for (final SpellAbility tgtSA : sas) {
             SpellAbilityStackInstance si = stack.getInstanceMatchingSpellAbilityID(tgtSA);
             if (si == null) {
@@ -98,12 +99,7 @@ public class ChangeTargetsEffect extends SpellAbilityEffect {
                             int div = changingTgtSA.getTotalDividedValue();
                             List<GameEntity> candidates = changingTgtSA.getTargetRestrictions().getAllCandidates(changingTgtSA, true);
                             if (sa.hasParam("RandomTargetRestriction")) {
-                                candidates.removeIf(new java.util.function.Predicate<GameEntity>() {
-                                    @Override
-                                    public boolean test(GameEntity c) {
-                                        return !c.isValid(sa.getParam("RandomTargetRestriction").split(","), sa.getActivatingPlayer(), sa.getHostCard(), sa);
-                                    }
-                                });
+                                candidates.removeIf(c -> !c.isValid(sa.getParam("RandomTargetRestriction").split(","), activator, sa.getHostCard(), sa));
                             }
                             // CR 115.7a If a target can't be changed to another legal target, the original target is unchanged
                             if (candidates.isEmpty()) {

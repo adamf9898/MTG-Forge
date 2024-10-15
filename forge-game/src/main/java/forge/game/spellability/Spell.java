@@ -17,17 +17,21 @@
  */
 package forge.game.spellability;
 
+import java.util.Map;
+
+import forge.game.card.CardCopyService;
 import org.apache.commons.lang3.ObjectUtils;
 
 import forge.card.CardStateName;
 import forge.card.mana.ManaCost;
 import forge.game.Game;
+import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
 import forge.game.card.CardFactory;
-import forge.game.card.CardUtil;
 import forge.game.cost.Cost;
 import forge.game.cost.CostPayment;
 import forge.game.player.Player;
+import forge.game.replacement.ReplacementType;
 import forge.game.staticability.StaticAbilityCantBeCast;
 import forge.game.zone.ZoneType;
 
@@ -67,9 +71,6 @@ public abstract class Spell extends SpellAbility implements java.io.Serializable
             return false;
         }
 
-        // Save the original cost and the face down info for a later check since the LKI copy will overwrite them
-        ManaCost origCost = card.getState(card.isFaceDown() ? CardStateName.Original : card.getCurrentStateName()).getManaCost();
-
         Player activator = this.getActivatingPlayer();
         if (activator == null) {
             activator = card.getController();
@@ -83,10 +84,13 @@ public abstract class Spell extends SpellAbility implements java.io.Serializable
             return false;
         }
 
+        // Save the original cost and the face down info for a later check since the LKI copy will overwrite them
+        ManaCost origCost = card.getState(card.isFaceDown() ? CardStateName.Original : card.getCurrentStateName()).getManaCost();
+
         // do performanceMode only for cases where the activator is different than controller
         if (!Spell.performanceMode && !card.getController().equals(activator)) {
             // always make a lki copy in this case?
-            card = CardUtil.getLKICopy(card);
+            card = CardCopyService.getLKICopy(card);
             card.setController(activator, 0);
         }
 
@@ -98,19 +102,17 @@ public abstract class Spell extends SpellAbility implements java.io.Serializable
 
         // for uncastables like lotus bloom, check if manaCost is blank (except for morph spells)
         // but ignore if it comes from PlayEffect
-        if (!isCastFaceDown()
-                && !hasSVar("IsCastFromPlayEffect")
-                && isBasicSpell()
-                && origCost.isNoCost()) {
+        if (!isCastFaceDown() && !isCastFromPlayEffect()
+                && isBasicSpell() && origCost.isNoCost()) {
             return false;
         }
 
-        if (!CostPayment.canPayAdditionalCosts(this.getPayCosts(), this)) {
+        if (!CostPayment.canPayAdditionalCosts(this.getPayCosts(), this, false)) {
             return false;
         }
 
         return true;
-    } // canPlay()
+    }
 
     /** {@inheritDoc} */
     @Override
@@ -148,13 +150,14 @@ public abstract class Spell extends SpellAbility implements java.io.Serializable
         this.castFaceDown = faceDown;
     }
 
+    @Override
     public Card getAlternateHost(Card source) {
         boolean lkicheck = false;
 
         // need to be done before so it works with Vivien and Zoetic Cavern
         if (source.isFaceDown() && source.isInZone(ZoneType.Exile)) {
             if (!source.isLKI()) {
-                source = CardUtil.getLKICopy(source);
+                source = CardCopyService.getLKICopy(source);
             }
 
             source.forceTurnFaceUp();
@@ -163,7 +166,7 @@ public abstract class Spell extends SpellAbility implements java.io.Serializable
 
         if (isBestow() && !source.isBestowed()) {
             if (!source.isLKI()) {
-                source = CardUtil.getLKICopy(source);
+                source = CardCopyService.getLKICopy(source);
             }
 
             source.animateBestow(false);
@@ -171,13 +174,13 @@ public abstract class Spell extends SpellAbility implements java.io.Serializable
         } else if (isCastFaceDown()) {
             // need a copy of the card to turn facedown without trigger anything
             if (!source.isLKI()) {
-                source = CardUtil.getLKICopy(source);
+                source = CardCopyService.getLKICopy(source);
             }
             source.turnFaceDownNoUpdate();
             lkicheck = true;
         } else if (getCardState() != null && source.getCurrentStateName() != getCardStateName() && getHostCard().getState(getCardStateName()) != null) {
             if (!source.isLKI()) {
-                source = CardUtil.getLKICopy(source);
+                source = CardCopyService.getLKICopy(source);
             }
             CardStateName stateName = getCardStateName();
             if (!source.hasState(stateName)) {
@@ -196,13 +199,20 @@ public abstract class Spell extends SpellAbility implements java.io.Serializable
             lkicheck = true;
         } else if (hasParam("Prototype")) {
             if (!source.isLKI()) {
-                source = CardUtil.getLKICopy(source);
+                source = CardCopyService.getLKICopy(source);
             }
-            Long next = source.getGame().getNextTimestamp();
+            long next = source.getGame().getNextTimestamp();
             source.addCloneState(CardFactory.getCloneStates(source, source, this), next);
             lkicheck = true;
         }
 
         return lkicheck ? source : null;
+    }
+
+    public boolean isCounterableBy(final SpellAbility sa) {
+        final Map<AbilityKey, Object> repParams = AbilityKey.mapFromAffected(getHostCard());
+        repParams.put(AbilityKey.SpellAbility, this);
+        repParams.put(AbilityKey.Cause, sa);
+        return !getHostCard().getGame().getReplacementHandler().cantHappenCheck(ReplacementType.Counter, repParams);
     }
 }

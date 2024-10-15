@@ -1,7 +1,6 @@
 package forge.menus;
 
 import java.awt.Desktop;
-import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.io.File;
@@ -43,22 +42,18 @@ public final class HelpMenu {
     }
 
     private static ActionListener getAboutForgeAction() {
-        return new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                final Localizer localizer = Localizer.getInstance();
-                FOptionPane.showMessageDialog(
-                        "Version : " + BuildInfo.getVersionString(),
-                        localizer.getMessage("lblAboutForge"));
-            }
+        return e -> {
+            final Localizer localizer = Localizer.getInstance();
+            FOptionPane.showMessageDialog(
+                    "Version : " + BuildInfo.getVersionString(),
+                    localizer.getMessage("lblAboutForge"));
         };
     }
 
     private static JMenu getMenu_Troubleshooting() {
         final Localizer localizer = Localizer.getInstance();
         JMenu mnu = new JMenu(localizer.getMessage("lblTroubleshooting"));
-        mnu.add(getMenuItem_UrlLink("How to Provide a Useful Bug Report", "http://www.slightlymagic.net/forum/viewtopic.php?f=26&t=9621"));
-        mnu.addSeparator();
+        mnu.add(getMenuItem_OpenLogFile());
         mnu.add(getMenuItem_ReadMeFile());
         return mnu;
     }
@@ -76,8 +71,8 @@ public final class HelpMenu {
         JMenu mnu = new JMenu(localizer.getMessage("lblGettingStarted"));
         mnu.add(getMenuItem_HowToPlayFile());
         mnu.addSeparator();
-        mnu.add(getMenuItem_UrlLink("Forge Wiki", "http://www.slightlymagic.net/wiki/Forge", KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)));
-        mnu.add(getMenuItem_UrlLink("What is Forge?", "http://www.slightlymagic.net/forum/viewtopic.php?f=26&t=468"));
+        mnu.add(getMenuItem_UrlLink("Forge Wiki", "https://github.com/Card-Forge/forge/wiki", KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)));
+        mnu.add(getMenuItem_UrlLink("What is Forge?", "https://github.com/Card-Forge/forge/wiki#what-is-forge"));
         return mnu;
     }
 
@@ -91,6 +86,13 @@ public final class HelpMenu {
     private static JMenuItem getMenuItem_ReadMeFile() {
         JMenuItem menuItem = new JMenuItem("README.txt");
         menuItem.addActionListener(getOpenFileAction(getFile(ForgeConstants.README_FILE)));
+        return menuItem;
+    }
+
+    private static JMenuItem getMenuItem_OpenLogFile() {
+        final Localizer localizer = Localizer.getInstance();
+        JMenuItem menuItem = new JMenuItem(localizer.getMessage("lblOpenLogFile"));
+        menuItem.addActionListener(getOpenFileAction(getAbsoluteFile(ForgeConstants.LOG_FILE)));
         return menuItem;
     }
 
@@ -109,15 +111,12 @@ public final class HelpMenu {
     }
 
     private static ActionListener getOpenFileAction(final File file) {
-        return new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                try {
-                    openFile(file);
-                } catch (IOException e1) {
-                    // Auto-generated catch block ignores the exception, but sends it to System.err and probably forge.log.
-                    e1.printStackTrace();
-                }
+        return e -> {
+            try {
+                openFile(file);
+            } catch (IOException e1) {
+                // Auto-generated catch block ignores the exception, but sends it to System.err and probably forge.log.
+                e1.printStackTrace();
             }
         };
     }
@@ -128,6 +127,14 @@ public final class HelpMenu {
         String filePath = FileUtil.pathCombine(System.getProperty("user.dir"), filename);
         if (FileUtil.doesFileExist(filePath)) {
             file = new File(filePath);
+        }
+        return file;
+    }
+
+    protected static File getAbsoluteFile(String filename) {
+        File file = null;
+        if (FileUtil.doesFileExist(filename)) {
+            file = new File(filename);
         }
         return file;
     }
@@ -158,12 +165,7 @@ public final class HelpMenu {
     }
 
     private static ActionListener getLaunchUrlAction(final String url) {
-        return new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                MenuUtil.openUrlInBrowser(url);
-            }
-        };
+        return e -> MenuUtil.openUrlInBrowser(url);
     }
 
 }

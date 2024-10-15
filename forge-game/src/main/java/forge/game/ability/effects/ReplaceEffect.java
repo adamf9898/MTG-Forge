@@ -13,7 +13,6 @@ import forge.game.player.Player;
 import forge.game.replacement.ReplacementResult;
 import forge.game.spellability.SpellAbility;
 
-
 public class ReplaceEffect extends SpellAbilityEffect {
 
     @Override
@@ -44,7 +43,12 @@ public class ReplaceEffect extends SpellAbilityEffect {
             }
         } else if ("PlanarDice".equals(type)) {
             params.put(varName, PlanarDice.smartValueOf(varValue));
-        } else {
+        } else if ("Map".equals(type)) {
+            Map<Player, Integer> m = (Map<Player, Integer>) sa.getReplacingObject(varName);
+            for (Player key : AbilityUtils.getDefinedPlayers(card, sa.getParam("VarKey"), sa)) {
+                m.put(key, m.getOrDefault(key, 0) + AbilityUtils.calculateAmount(card, varValue, sa));
+            }
+        } else if (varName != null) {
             params.put(varName, AbilityUtils.calculateAmount(card, varValue, sa));
         }
 

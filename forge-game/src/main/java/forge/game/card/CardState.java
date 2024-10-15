@@ -18,8 +18,8 @@
 package forge.game.card;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -45,18 +45,23 @@ import forge.game.player.Player;
 import forge.game.replacement.ReplacementEffect;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityPredicates;
+import forge.game.spellability.SpellPermanent;
 import forge.game.staticability.StaticAbility;
 import forge.game.trigger.Trigger;
+import forge.util.ITranslatable;
 import forge.util.collect.FCollection;
 import forge.util.collect.FCollectionView;
 import io.sentry.Breadcrumb;
 import io.sentry.Sentry;
+import org.apache.commons.lang3.StringUtils;
 
-public class CardState extends GameObject implements IHasSVars {
+public class CardState extends GameObject implements IHasSVars, ITranslatable {
     private String name = "";
     private CardType type = new CardType(false);
     private ManaCost manaCost = ManaCost.NO_COST;
     private byte color = MagicColor.COLORLESS;
+    private String oracleText = "";
+    private String functionalVariantName = null;
     private int basePower = 0;
     private int baseToughness = 0;
     private String basePowerString = null;
@@ -64,6 +69,7 @@ public class CardState extends GameObject implements IHasSVars {
     private String baseLoyalty = "";
     private String baseDefense = "";
     private KeywordCollection intrinsicKeywords = new KeywordCollection();
+    private Set<Integer> attractionLights = null;
 
     private final FCollection<SpellAbility> nonManaAbilities = new FCollection<>();
     private final FCollection<SpellAbility> manaAbilities = new FCollection<>();
@@ -84,6 +90,10 @@ public class CardState extends GameObject implements IHasSVars {
     private ReplacementEffect loyaltyRep;
     private ReplacementEffect defenseRep;
     private ReplacementEffect battleTypeRep;
+    private ReplacementEffect sagaRep;
+
+    private SpellAbility manifestUp;
+    private SpellAbility cloakUp;
 
     public CardState(Card card, CardStateName name) {
         this(card.getView().createAlternateState(name), card);
@@ -188,6 +198,25 @@ public class CardState extends GameObject implements IHasSVars {
         view.updateColors(card);
     }
 
+    public String getOracleText() {
+        return oracleText;
+    }
+    public void setOracleText(final String oracleText) {
+        this.oracleText = oracleText;
+        view.setOracleText(oracleText);
+    }
+
+    public String getFunctionalVariantName() {
+        return functionalVariantName;
+    }
+    public void setFunctionalVariantName(String functionalVariantName) {
+        if(functionalVariantName != null && functionalVariantName.isEmpty())
+            functionalVariantName = null;
+        this.functionalVariantName = functionalVariantName;
+        view.setFunctionalVariantName(functionalVariantName);
+    }
+
+
     public final int getBasePower() {
         return basePower;
     }
@@ -236,6 +265,15 @@ public class CardState extends GameObject implements IHasSVars {
         view.updateDefense(this);
     }
 
+    public Set<Integer> getAttractionLights() {
+        return this.attractionLights;
+    }
+
+    public final void setAttractionLights(Set<Integer> attractionLights) {
+        this.attractionLights = attractionLights;
+        view.updateAttractionLights(this);
+    }
+
     public final Collection<KeywordInterface> getCachedKeywords() {
         return cachedKeywords.getValues();
     }
@@ -279,7 +317,7 @@ public class CardState extends GameObject implements IHasSVars {
             Breadcrumb bread = new Breadcrumb(msg);
             bread.setData("Card", card.getName());
             bread.setData("Keyword", s);
-            Sentry.addBreadcrumb(bread, this);
+            Sentry.addBreadcrumb(bread);
 
             //rethrow
             throw new RuntimeException("Error in Keyword " + s + " for card " + card.getName(), e);
@@ -308,6 +346,9 @@ public class CardState extends GameObject implements IHasSVars {
     public final boolean removeIntrinsicKeyword(final KeywordInterface s) {
         return intrinsicKeywords.remove(s);
     }
+    public final boolean removeIntrinsicKeyword(final Keyword k) {
+        return intrinsicKeywords.removeAll(k);
+    }
 
     public final FCollectionView<SpellAbility> getSpellAbilities() {
         FCollection<SpellAbility> newCol = new FCollection<>(manaAbilities);
@@ -335,6 +376,15 @@ public class CardState extends GameObject implements IHasSVars {
     }
     public final SpellAbility getFirstSpellAbility() {
         return Iterables.getFirst(getNonManaAbilities(), null);
+    }
+
+    public final SpellAbility getFirstSpellAbilityWithFallback() {
+        SpellAbility sa = getFirstSpellAbility();
+        if (sa != null || getTypeWithChanges().isLand()) {
+            return sa;
+        }
+        // this happens if it's transformed backside (e.g. Disturbed)
+        return new SpellPermanent(getCard(), this);
     }
 
     public final boolean hasSpellAbility(final SpellAbility sa) {
@@ -480,6 +530,12 @@ public class CardState extends GameObject implements IHasSVars {
             //result.add(battleTypeRep);
 
         }
+        if (type.hasSubtype("Saga") && !hasKeyword(Keyword.READ_AHEAD)) {
+            if (sagaRep == null) {
+                sagaRep = CardFactoryUtil.makeEtbCounter("etbCounter:LORE:1", this, true);
+            }
+            result.add(sagaRep);
+        }
 
         card.updateReplacementEffects(result, this);
         return result;
@@ -571,10 +627,13 @@ public class CardState extends GameObject implements IHasSVars {
         setType(source.type);
         setManaCost(source.getManaCost());
         setColor(source.getColor());
+        setOracleText(source.getOracleText());
+        setFunctionalVariantName(source.getFunctionalVariantName());
         setBasePower(source.getBasePower());
         setBaseToughness(source.getBaseToughness());
         setBaseLoyalty(source.getBaseLoyalty());
         setBaseDefense(source.getBaseDefense());
+        setAttractionLights(source.getAttractionLights());
         setSVars(source.getSVars());
 
         manaAbilities.clear();
@@ -627,11 +686,16 @@ public class CardState extends GameObject implements IHasSVars {
                 staticAbilities.add(sa.copy(card, lki));
             }
         }
-        if (lki && source.loyaltyRep != null) {
-            this.loyaltyRep = source.loyaltyRep.copy(card, lki);
-        }
-        if (lki && source.defenseRep != null) {
-            this.defenseRep = source.defenseRep.copy(card, lki);
+        if (lki) {
+            if (source.loyaltyRep != null) {
+                loyaltyRep = source.loyaltyRep.copy(card, true);
+            }
+            if (source.defenseRep != null) {
+                defenseRep = source.defenseRep.copy(card, true);
+            }
+            if (source.sagaRep != null) {
+                sagaRep = source.sagaRep.copy(card, true);
+            }
         }
     }
 
@@ -707,15 +771,27 @@ public class CardState extends GameObject implements IHasSVars {
         }
     }
 
+    public ImmutableList<CardTraitBase> getTraits() {
+        return ImmutableList.<CardTraitBase>builder()
+                .addAll(manaAbilities)
+                .addAll(nonManaAbilities)
+                .addAll(triggers)
+                .addAll(replacementEffects)
+                .addAll(staticAbilities)
+                .build();
+    }
+
+    public void resetOriginalHost(Card oldHost) {
+        for (final CardTraitBase ctb : getTraits()) {
+            if (ctb.isIntrinsic() && ctb.getOriginalHost() != null && ctb.getOriginalHost().equals(oldHost)) {
+                // only update traits with undesired host or SVar lookup would fail
+                ctb.setCardState(this);
+            }
+        }
+    }
+
     public void updateChangedText() {
-        final List<CardTraitBase> allAbs = ImmutableList.<CardTraitBase>builder()
-            .addAll(manaAbilities)
-            .addAll(nonManaAbilities)
-            .addAll(triggers)
-            .addAll(replacementEffects)
-            .addAll(staticAbilities)
-            .build();
-        for (final CardTraitBase ctb : allAbs) {
+        for (final CardTraitBase ctb : getTraits()) {
             if (ctb.isIntrinsic()) {
                 ctb.changeText();
             }
@@ -723,17 +799,50 @@ public class CardState extends GameObject implements IHasSVars {
     }
 
     public void changeTextIntrinsic(Map<String,String> colorMap, Map<String,String> typeMap) {
-        final List<CardTraitBase> allAbs = ImmutableList.<CardTraitBase>builder()
-            .addAll(manaAbilities)
-            .addAll(nonManaAbilities)
-            .addAll(triggers)
-            .addAll(replacementEffects)
-            .addAll(staticAbilities)
-            .build();
-        for (final CardTraitBase ctb : allAbs) {
+        for (final CardTraitBase ctb : getTraits()) {
             if (ctb.isIntrinsic()) {
                 ctb.changeTextIntrinsic(colorMap, typeMap);
             }
         }
+    }
+
+    public final int getFinalChapterNr() {
+        int n = 0;
+        for (final Trigger t : getTriggers()) {
+            if (t.isChapter()) {
+                n = Math.max(n, t.getChapter());
+            }
+        }
+        return n;
+    }
+
+    public SpellAbility getManifestUp() {
+        if (this.manifestUp == null) {
+            manifestUp = CardFactoryUtil.abilityTurnFaceUp(this, "ManifestUp", "Unmanifest");
+        }
+        return manifestUp;
+    }
+    public SpellAbility getCloakUp() {
+        if (this.cloakUp == null) {
+            cloakUp = CardFactoryUtil.abilityTurnFaceUp(this, "CloakUp", "Uncloak");
+        }
+        return cloakUp;
+    }
+
+    @Override
+    public String getTranslationKey() {
+        if(StringUtils.isNotEmpty(functionalVariantName))
+            return name + " $" + functionalVariantName;
+        return name;
+    }
+
+    @Override
+    public String getUntranslatedType() {
+        return getType().toString();
+    }
+
+    @Override
+    public String getUntranslatedOracle() {
+        return getOracleText();
     }
 }

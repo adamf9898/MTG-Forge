@@ -38,7 +38,6 @@ import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityStackInstance;
 import forge.game.spellability.TargetChoices;
-import forge.game.zone.ZoneType;
 import forge.util.Expressions;
 import forge.util.Localizer;
 import forge.util.collect.FCollection;
@@ -70,7 +69,8 @@ public class TriggerSpellAbilityCastOrCopy extends Trigger {
     }
 
     /** {@inheritDoc}
-     * @param runParams*/
+     * @param runParams
+     **/
     @Override
     public final boolean performTest(final Map<AbilityKey, Object> runParams) {
         final SpellAbility spellAbility = (SpellAbility) runParams.get(AbilityKey.SpellAbility);
@@ -110,11 +110,35 @@ public class TriggerSpellAbilityCastOrCopy extends Trigger {
                     return false;
                 }
             }
+            if (hasParam("ActivatorThisTurnCastEach")) {
+                final String compare = getParam("ActivatorThisTurnCastEach");
+                final String valid = getParamOrDefault("ValidCard", "Card");
+                boolean found = false;
+                int right = Integer.parseInt(compare.substring(2));
+                for (String v : valid.split(",")) {
+                    if (!cast.isValid(v, getHostCard().getController(), getHostCard(), this)) {
+                        continue;
+                    }
+                    List<Card> thisTurnCast = CardUtil.getThisTurnCast(v, getHostCard(), this, getHostCard().getController());
+                    thisTurnCast = CardLists.filterControlledByAsList(thisTurnCast, activator);
+                    int left = thisTurnCast.size();
+                    if (Expressions.compare(left, compare, right)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    return false;
+                }
+            }
         }
         if (!matchesValidParam("ValidCard", cast)) {
             return false;
         }
         if (!matchesValidParam("ValidSA", spellAbility)) {
+            return false;
+        }
+        if (!matchesValidParam("ValidSAonCard", spellAbility, cast)) {
             return false;
         }
 
@@ -127,7 +151,7 @@ public class TriggerSpellAbilityCastOrCopy extends Trigger {
             boolean validTgtFound = false;
             while (sa != null && !validTgtFound) {
                 for (final GameEntity ge : sa.getTargets().getTargetEntities()) {
-                    if (matchesValid(ge, getParam("TargetsValid").split(","))) {
+                    if (matchesValidParam("TargetsValid", ge)) {
                         validTgtFound = true;
                         break;
                     }
@@ -190,18 +214,6 @@ public class TriggerSpellAbilityCastOrCopy extends Trigger {
             }
         }
 
-        if (hasParam("Outlast")) {
-            if (!spellAbility.isOutlast()) {
-                return false;
-            }
-        }
-
-        if (hasParam("EternalizeOrEmbalm")) {
-            if (!spellAbility.hasParam("Eternalize") && !spellAbility.hasParam("Embalm")) {
-                return false;
-            }
-        }
-
         // use numTargets instead?
         if (hasParam("IsSingleTarget")) {
             Set<GameObject> targets = Sets.newHashSet();
@@ -212,23 +224,6 @@ public class TriggerSpellAbilityCastOrCopy extends Trigger {
                 }
             }
             if (targets.size() != 1) {
-                return false;
-            }
-        }
-
-        if (hasParam("SharesNameWithActivatorsZone")) {
-            String zones = getParam("SharesNameWithActivatorsZone");
-            if (si == null) {
-                return false;
-            }
-            boolean sameNameFound = false;
-            for (Card c: si.getSpellAbility().getActivatingPlayer().getCardsIn(ZoneType.listValueOf(zones))) {
-                if (cast.getName().equals(c.getName())) {
-                    sameNameFound = true;
-                    break;
-                }
-            }
-            if (!sameNameFound) {
                 return false;
             }
         }

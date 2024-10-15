@@ -19,10 +19,11 @@ package forge.game.cost;
 
 import java.util.Map;
 
+import forge.game.Game;
 import forge.game.ability.AbilityKey;
-import forge.game.card.CardCollection;
 import forge.game.card.CardZoneTable;
 import forge.game.player.Player;
+import forge.game.player.PlayerCollection;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
 
@@ -49,7 +50,10 @@ public class CostMill extends CostPart {
     }
 
     @Override
-    public int paymentOrder() { return 10; }
+    public int paymentOrder() {
+        // In a world where costs are fully undoable, revealing unknown information should be done last.
+        return 20;
+    }
 
     /*
      * (non-Javadoc)
@@ -90,12 +94,11 @@ public class CostMill extends CostPart {
 
     @Override
     public final boolean payAsDecided(final Player ai, final PaymentDecision decision, SpellAbility ability, final boolean effect) {
-        CardZoneTable table = new CardZoneTable();
+        Game game = ai.getGame();
         Map<AbilityKey, Object> moveParams = AbilityKey.newMap();
-        moveParams.put(AbilityKey.LastStateBattlefield, ai.getGame().getLastStateBattlefield());
-        moveParams.put(AbilityKey.LastStateGraveyard, ai.getGame().getLastStateGraveyard());
-        ability.getPaidHash().put("Milled", true, (CardCollection) ai.mill(decision.c, ZoneType.Graveyard, ability, table, moveParams));
-        table.triggerChangesZoneAll(ai.getGame(), ability);
+        CardZoneTable zoneMovements = AbilityKey.addCardZoneTableParams(moveParams, ability);
+        ability.getPaidHash().put("Milled", true, game.getAction().mill(new PlayerCollection(ai), decision.c, ZoneType.Graveyard, ability, moveParams));
+        zoneMovements.triggerChangesZoneAll(game, ability);
         return true;
     }
 

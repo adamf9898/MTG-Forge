@@ -1,6 +1,5 @@
 package forge.adventure.scene;
 
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
@@ -14,6 +13,7 @@ import com.github.tommyettinger.textra.TextraButton;
 import com.github.tommyettinger.textra.TextraLabel;
 import forge.Forge;
 import forge.adventure.data.DifficultyData;
+import forge.adventure.player.AdventurePlayer;
 import forge.adventure.stage.WorldStage;
 import forge.adventure.util.Config;
 import forge.adventure.util.Controls;
@@ -98,7 +98,6 @@ public class SaveLoadScene extends UIScene {
         ui.onButtonPress("return", SaveLoadScene.this::back);
         difficulty.setSelectedIndex(1);
         difficulty.setAlignment(Align.center);
-        difficulty.getStyle().fontColor = Color.GOLD;
         difficulty.setX(scrollPane.getWidth() - difficulty.getWidth() + 5);
         difficulty.setY(scrollPane.getTop() - difficulty.getHeight() - 5);
     }
@@ -113,7 +112,7 @@ public class SaveLoadScene extends UIScene {
     }
 
     public class SaveSlot extends Selectable<TextraButton> {
-        private int slotNumber;
+        private final int slotNumber;
 
         public SaveSlot(int slotNumber) {
             super(Controls.newTextButton("..."));
@@ -164,27 +163,19 @@ public class SaveLoadScene extends UIScene {
         if (slot > 0)
             lastSelectedSlot = slot;
         if (previews.containsKey(slot)) {
-            WorldSaveHeader header = previews.get(slot);
-            if (header.preview != null) {
-                previewImage.setDrawable(new TextureRegionDrawable(new Texture(header.preview)));
+            WorldSaveHeader worldSaveHeader = previews.get(slot);
+            if (worldSaveHeader.preview != null) {
+                previewImage.setDrawable(new TextureRegionDrawable(new Texture(worldSaveHeader.preview)));
                 previewImage.setScaling(Scaling.fit);
                 previewImage.layout();
                 previewImage.setVisible(true);
                 previewDate.setVisible(true);
-                if (header.saveDate != null)
-                    previewDate.setText("[%98]" + DateFormat.getDateInstance().format(header.saveDate) + " " + DateFormat.getTimeInstance(DateFormat.SHORT).format(header.saveDate));
+                if (worldSaveHeader.saveDate != null)
+                    previewDate.setText("[%98]" + DateFormat.getDateInstance().format(worldSaveHeader.saveDate) + " " + DateFormat.getTimeInstance(DateFormat.SHORT).format(worldSaveHeader.saveDate));
                 else
                     previewDate.setText("");
-                if (header.name.contains(Character.toString(ASCII_179))) {
-                    String[] split = TextUtil.split(header.name, ASCII_179);
-                    try {
-                        playerLocation.setText(split[1]);
-                    } catch (Exception e) {
-                        playerLocation.setText("");
-                    }
-                } else {
-                    playerLocation.setText("");
-                }
+                //getLocation
+                playerLocation.setText(getSplitHeaderName(worldSaveHeader, true));
             }
         } else {
             if (previewImage != null)
@@ -195,15 +186,28 @@ public class SaveLoadScene extends UIScene {
         return true;
     }
 
+    boolean loaded = false;
+
     public void loadSave() {
+        if (loaded)
+            return;
+        loaded = true;
         switch (mode) {
             case Save:
+                if (TileMapScene.instance().currentMap().isInMap()) {
+                    //Access to screen should be disabled, but stop the process just in case.
+                    //Saving needs to be disabled inside maps until we can capture and load exact map state
+                    //Otherwise location based events for quests can be skipped by saving and then loading outside the map
+                    Dialog noSave = createGenericDialog("", Forge.getLocalizer().getMessage("lblGameNotSaved"), Forge.getLocalizer().getMessage("lblOK"), null, null, null);
+                    showDialog(noSave);
+                    return;
+                }
                 if (currentSlot > 0) {
                     //prevent NPE, allowed saveslot is 1 to 10..
                     textInput.setText(buttons.get(currentSlot).actor.getText());
                     if (saveDialog == null) {
                         saveDialog = createGenericDialog(Forge.getLocalizer().getMessage("lblSave"), null,
-                                Forge.getLocalizer().getMessage("lblOk"),
+                                Forge.getLocalizer().getMessage("lblOK"),
                                 Forge.getLocalizer().getMessage("lblAbort"), () -> {
                                     this.save();
                                     removeDialog();
@@ -217,17 +221,19 @@ public class SaveLoadScene extends UIScene {
                     showDialog(saveDialog);
                     stage.setKeyboardFocus(textInput);
                 }
+                loaded = false;
                 break;
             case Load:
                 try {
                     Forge.setTransitionScreen(new TransitionScreen(() -> {
+                        loaded = false;
                         if (WorldSave.load(currentSlot)) {
                             SoundSystem.instance.changeBackgroundTrack();
                             Forge.switchScene(GameScene.instance());
                         } else {
                             Forge.clearTransitionScreen();
                         }
-                    }, null, false, true, "Loading World..."));
+                    }, null, false, true, Forge.getLocalizer().getMessage("lblLoadingWorld")));
                 } catch (Exception e) {
                     Forge.clearTransitionScreen();
                 }
@@ -235,6 +241,7 @@ public class SaveLoadScene extends UIScene {
             case NewGamePlus:
                 try {
                     Forge.setTransitionScreen(new TransitionScreen(() -> {
+                        loaded = false;
                         if (WorldSave.load(currentSlot)) {
                             WorldSave.getCurrentSave().clearChanges();
                             WorldSave.getCurrentSave().getWorld().generateNew(0);
@@ -244,14 +251,17 @@ public class SaveLoadScene extends UIScene {
                             Current.player().setWorldPosX((int) (WorldSave.getCurrentSave().getWorld().getData().playerStartPosX * WorldSave.getCurrentSave().getWorld().getData().width * WorldSave.getCurrentSave().getWorld().getTileSize()));
                             Current.player().getQuests().clear();
                             Current.player().resetQuestFlags();
+                            Current.player().setCharacterFlag("newGamePlus", 1);
+                            AdventurePlayer.current().addQuest("28");
                             WorldStage.getInstance().setDirectlyEnterPOI();
                             SoundSystem.instance.changeBackgroundTrack();
                             Forge.switchScene(GameScene.instance());
                         } else {
                             Forge.clearTransitionScreen();
                         }
-                    }, null, false, true, "Generating World..."));
+                    }, null, false, true, Forge.getLocalizer().getMessage("lblGeneratingWorld")));
                 } catch (Exception e) {
+                    loaded = false;
                     Forge.clearTransitionScreen();
                 }
                 break;
@@ -260,20 +270,22 @@ public class SaveLoadScene extends UIScene {
 
 
     public void save() {
-        if (WorldSave.getCurrentSave().save(textInput.getText() + ASCII_179 + GameScene.instance().getAdventurePlayerLocation(true, true), currentSlot)) {
-            updateFiles();
-            //ensure the dialog is hidden before switching
+        if (!TileMapScene.instance().currentMap().isInMap()) {
+            if (WorldSave.getCurrentSave().save(textInput.getText() + getSaveFileSuffix(), currentSlot)) {
+                updateFiles();
+                //ensure the dialog is hidden before switching
 
-            Scene restoreScene = Forge.switchToLast();
-            if (restoreScene != null) {
-                restoreScene = Forge.switchToLast();
+                Scene restoreScene = Forge.switchToLast();
+                if (restoreScene != null) {
+                    restoreScene = Forge.switchToLast();
+                }
+
+                if (restoreScene == null) {
+                    restoreScene = GameScene.instance();
+                }
+
+                Forge.switchScene(restoreScene);
             }
-
-            if (restoreScene == null) {
-                restoreScene = GameScene.instance();
-            }
-
-            Forge.switchScene(restoreScene);
         }
     }
 
@@ -291,24 +303,30 @@ public class SaveLoadScene extends UIScene {
                     try (FileInputStream fos = new FileInputStream(name.getAbsolutePath());
                          InflaterInputStream inf = new InflaterInputStream(fos);
                          ObjectInputStream oos = new ObjectInputStream(inf)) {
-
-
                         int slot = WorldSave.filenameToSlot(name.getName());
-                        WorldSaveHeader header = (WorldSaveHeader) oos.readObject();
-                        if (header.name.contains(Character.toString(ASCII_179))) {
-                            String[] split = TextUtil.split(header.name, ASCII_179);
-                            buttons.get(slot).actor.setText(split[0]);
-                            //playerLocation.setText(split[1]);
-                        } else {
-                            buttons.get(slot).actor.setText(header.name);
-                        }
-                        previews.put(slot, header);
+                        WorldSaveHeader worldSaveHeader = (WorldSaveHeader) oos.readObject();
+                        //get header name
+                        buttons.get(slot).actor.setText(getSplitHeaderName(worldSaveHeader, false));
+                        previews.put(slot, worldSaveHeader);
                     }
                 } catch (ClassNotFoundException | IOException | GdxRuntimeException e) {
+                    //e.printStackTrace();
                 }
             }
         }
 
+    }
+
+    private String getSplitHeaderName(WorldSaveHeader worldSaveHeader, boolean getLocation) {
+        String noMapData = "[RED]No Map Data!";
+        if (worldSaveHeader.name.contains(Character.toString(ASCII_179))) {
+            String[] split = TextUtil.split(worldSaveHeader.name, ASCII_179);
+            if (getLocation)
+                return split.length > 1 ? split[1] : noMapData;
+            else
+                return split[0];
+        }
+        return getLocation ? noMapData : worldSaveHeader.name;
     }
 
     public enum Modes {
@@ -356,5 +374,31 @@ public class SaveLoadScene extends UIScene {
         }
         performTouch(scrollPane); //can use mouse wheel if available to scroll
         super.enter();
+    }
+
+    public String getSaveFileSuffix() {
+        String difficulty;
+        switch (AdventurePlayer.current().getDifficulty().name) {
+            case "easy":
+            case "Easy":
+                difficulty = "[%99][CYAN]\uFF0A[WHITE]";
+                break;
+            case "normal":
+            case "Normal":
+                difficulty = "[%99][GREEN]\uFF0A[WHITE]";
+                break;
+            case "hard":
+            case "Hard":
+                difficulty = "[%99][GOLD]\uFF0A[WHITE]";
+                break;
+            case "insane":
+            case "Insane":
+                difficulty = "[%99][RED]\uFF0A[WHITE]";
+                break;
+            default:
+                difficulty = "[%99][WHITE]";
+                break;
+        }
+        return ASCII_179 + difficulty + GameScene.instance().getAdventurePlayerLocation(true, true);
     }
 }

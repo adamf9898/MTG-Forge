@@ -11,12 +11,11 @@ public class GameRules {
     private int gamesToWinMatch = 2;
     private boolean playForAnte = false;
     private boolean matchAnteRarity = false;
+    private boolean AISideboardingEnabled = false;
     private boolean sideboardForAI = false;
     private final Set<GameType> appliedVariants = EnumSet.noneOf(GameType.class);
 
     // it's a preference, not rule... but I could hardly find a better place for it
-    private boolean canCloneUseTargetsImage;
-    // same for me
     private boolean useGrayText;
 
     // whether to warn about cards AI can't play well
@@ -79,6 +78,14 @@ public class GameRules {
         sideboardForAI = sideboard;
     }
 
+    public boolean getAISideboardingEnabled() {
+        return AISideboardingEnabled;
+    }
+
+    public void setAISideboardingEnabled(final boolean aiSideboarding) {
+        AISideboardingEnabled = aiSideboarding;
+    }
+
     public int getGamesToWinMatch() {
         return gamesToWinMatch;
     }
@@ -86,6 +93,10 @@ public class GameRules {
     public void setAppliedVariants(final Set<GameType> appliedVariants) {
         if (appliedVariants != null && !appliedVariants.isEmpty())
             this.appliedVariants.addAll(appliedVariants);
+    }
+
+    public void addAppliedVariant(final GameType variant) {
+        this.appliedVariants.add(variant);
     }
 
     public boolean hasAppliedVariant(final GameType variant) {
@@ -97,13 +108,6 @@ public class GameRules {
                 || appliedVariants.contains(GameType.Oathbreaker)
                 || appliedVariants.contains(GameType.TinyLeaders)
                 || appliedVariants.contains(GameType.Brawl);
-    }
-
-    public boolean canCloneUseTargetsImage() {
-        return canCloneUseTargetsImage;
-    }
-    public void setCanCloneUseTargetsImage(final boolean canCloneUseTargetsImage) {
-        this.canCloneUseTargetsImage = canCloneUseTargetsImage;
     }
 
     public boolean useGrayText() {

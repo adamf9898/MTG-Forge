@@ -38,7 +38,7 @@ public enum PhaseType {
 
     private static final Map<PhaseType, Integer> PHASE_INDEX = initializePhaseIndex();
 
-    private static final Map<PhaseType, Integer> initializePhaseIndex() {
+    private static Map<PhaseType, Integer> initializePhaseIndex() {
         Map<PhaseType, Integer> phaseIndex = Maps.newEnumMap(PhaseType.class);
         phaseIndex.put(UNTAP, 0);
         phaseIndex.put(UPKEEP, 0);
@@ -116,6 +116,9 @@ public enum PhaseType {
                 String sTo = s.substring(idxArrow + 2);
                 PhaseType to = StringUtils.isBlank(sTo) ? PhaseType.CLEANUP : PhaseType.smartValueOf(sTo);
                 result.addAll(EnumSet.range(from, to));
+            } else if (s.equals("Main")) {
+                result.add(MAIN1);
+                result.add(MAIN2);
             } else {
                 result.add(PhaseType.smartValueOf(s));
             }

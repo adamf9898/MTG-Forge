@@ -17,16 +17,7 @@
  */
 package forge.game.spellability;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.apache.commons.lang3.StringUtils;
-
 import com.google.common.collect.Iterables;
-
 import forge.card.ColorSet;
 import forge.game.Game;
 import forge.game.GameObject;
@@ -40,6 +31,9 @@ import forge.game.player.Player;
 import forge.game.zone.ZoneType;
 import forge.util.Expressions;
 import forge.util.collect.FCollection;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.*;
 
 /**
  * <p>
@@ -113,9 +107,6 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
             }
             if (value.equals("Bargain")) {
                 this.bargain = true;
-            }
-            if (value.equals("AllTargetsLegal")) {
-                this.setAllTargetsLegal(true);
             }
             if (value.equals("AltCost"))
                 this.altCostPaid = true;
@@ -215,8 +206,8 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
             }
         }
 
-        if (params.containsKey("ConditionShareAllColors")) {
-            this.setShareAllColors(params.get("ConditionShareAllColors"));
+        if (params.containsKey("ConditionNoDifferentColors")) {
+            this.setNoDifferentColors(params.get("ConditionNoDifferentColors"));
         }
 
         if (params.containsKey("ConditionManaSpent")) {
@@ -279,13 +270,13 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
         if (this.isRevolt() && !activator.hasRevolt()) return false;
         if (this.isDesert() && !activator.hasDesert()) return false;
         if (this.isBlessing() && !activator.hasBlessing()) return false;
-        
+
         if (this.kicked && !sa.isKicked()) return false;
         if (this.kicked1 && !sa.isOptionalCostPaid(OptionalCost.Kicker1)) return false;
         if (this.kicked2 && !sa.isOptionalCostPaid(OptionalCost.Kicker2)) return false;
         if (this.altCostPaid && !sa.isOptionalCostPaid(OptionalCost.AltCost)) return false;
         if (this.surgeCostPaid && !sa.isSurged()) return false;
-        if (this.bargain && !sa.isBargain()) return false;
+        if (this.bargain && !sa.isBargained()) return false;
         if (this.foretold && !sa.isForetold()) return false;
 
         if (this.optionalCostPaid && this.optionalBoolean && !sa.isOptionalCostPaid(OptionalCost.Generic)) return false;
@@ -305,16 +296,8 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
             }
         }
 
-        if (this.isAllTargetsLegal()) {
-            for (Card c : sa.getTargets().getTargetCards()) {
-                if (!sa.canTarget(c)) {
-                    return false;
-                }
-            }
-        }
-
-        if (this.getShareAllColors() != null) {
-            List<Card> tgts = AbilityUtils.getDefinedCards(host, this.getShareAllColors(), sa);
+        if (this.getNoDifferentColors() != null) {
+            List<Card> tgts = AbilityUtils.getDefinedCards(host, this.getNoDifferentColors(), sa);
             Card first = Iterables.getFirst(tgts, null);
             if (first == null) {
                 return false;
@@ -402,7 +385,7 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
                 }
             }
 
-            final int left = Iterables.size(Iterables.filter(list, GameObjectPredicates.restriction(getIsPresent().split(","), sa.getActivatingPlayer(), host, sa)));
+            final int left = Iterables.size(Iterables.filter(list, GameObjectPredicates.restriction(getIsPresent().split(","), activator, host, sa)));
 
             final String rightString = this.getPresentCompare().substring(2);
             int right = AbilityUtils.calculateAmount(host, rightString, sa);
@@ -433,7 +416,7 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
                 }
             }
 
-            final int left = Iterables.size(Iterables.filter(list, GameObjectPredicates.restriction(getIsPresent2().split(","), sa.getActivatingPlayer(), host, sa)));
+            final int left = Iterables.size(Iterables.filter(list, GameObjectPredicates.restriction(getIsPresent2().split(","), activator, host, sa)));
 
             final String rightString = this.getPresentCompare2().substring(2);
             int right = AbilityUtils.calculateAmount(host, rightString, sa);
@@ -487,7 +470,7 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
 
             while (abSub != null && !result) {
                 for (final GameObject o : abSub.getTargets()) {
-                    if (o.isValid(this.getTargetValidTargeting().split(","), sa.getActivatingPlayer(), host, sa)) {
+                    if (o.isValid(this.getTargetValidTargeting().split(","), activator, host, sa)) {
                         result = true;
                         break;
                     }
@@ -550,7 +533,6 @@ public class SpellAbilityCondition extends SpellAbilityVariables {
             if (!Expressions.compare(svarValue, this.getsVarOperator(), operandValue) && !secondCheck) {
                 return false;
             }
-
         }
 
         return true;

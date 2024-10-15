@@ -26,6 +26,7 @@ import forge.game.Game;
 import forge.game.GameEntity;
 import forge.game.ability.AbilityUtils;
 import forge.game.card.Card;
+import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
 import forge.game.card.CardPredicates;
 import forge.game.cost.Cost;
@@ -83,7 +84,7 @@ public class StaticAbilityCantAttackBlock {
             return false;
         }
 
-        if (stAb.hasParam("DefenderKeyword")) {
+        if (stAb.isKeyword(Keyword.DEFENDER)) {
             // check for "can attack as if didn't have defender" static
             if (StaticAbilityCanAttackDefender.canAttack(card, target)) {
                 return false;
@@ -144,7 +145,13 @@ public class StaticAbilityCantAttackBlock {
     }
 
     public static boolean cantBlockBy(final Card attacker, final Card blocker) {
-        for (final Card ca : attacker.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES)) {
+        CardCollection list = new CardCollection(attacker.getGame().getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES));
+        // add attacker and blocker in case of LKI
+        list.add(attacker);
+        if (blocker != null) {
+            list.add(blocker);
+        }
+        for (final Card ca : list) {
             for (final StaticAbility stAb : ca.getStaticAbilities()) {
                 if (!stAb.checkConditions(CantBlockByMode)) {
                     continue;
@@ -195,8 +202,11 @@ public class StaticAbilityCantAttackBlock {
         if (!stAb.matchesValidParam("ValidBlockerRelative", blocker, attacker)) {
             return false;
         }
-        if (blocker != null) {
-            if (!stAb.matchesValidParam("ValidDefender", blocker.getController())) {
+        if (blocker == null || !stAb.matchesValidParam("ValidDefender", blocker.getController())) {
+            return false;
+        }
+        if (stAb.isKeyword(Keyword.LANDWALK)) {
+            if (StaticAbilityIgnoreLandwalk.ignoreLandWalk(attacker, blocker, stAb.getKeyword())) {
                 return false;
             }
         }
@@ -251,7 +261,12 @@ public class StaticAbilityCantAttackBlock {
             if (remember) {
                 hostCard.addRemembered(attacker);
             }
+            // keep X shards
+            boolean addX = costString.startsWith("X");
             costString = Integer.toString(AbilityUtils.calculateAmount(hostCard, stAb.getSVar(costString), stAb));
+            if (addX) {
+                costString += " X";
+            }
             if (remember) {
                 hostCard.removeRemembered(attacker);
             }
@@ -285,7 +300,11 @@ public class StaticAbilityCantAttackBlock {
         }
         String costString = stAb.getParam("Cost");
         if (stAb.hasSVar(costString)) {
-            costString = Integer.toString(AbilityUtils.calculateAmount(hostCard, costString, stAb));
+            boolean addX = costString.startsWith("X");
+            costString = Integer.toString(AbilityUtils.calculateAmount(hostCard, stAb.getSVar(costString), stAb));
+            if (addX) {
+                costString += " X";
+            }
         }
 
         return new Cost(costString, true);
@@ -338,11 +357,6 @@ public class StaticAbilityCantAttackBlock {
                 applyMinMaxBlockerAbility(stAb, attacker, defender, result);
             }
         }
-        if (attacker.hasKeyword("CARDNAME can't be blocked unless all creatures defending player controls block it.")) {
-            if (defender != null) {
-                result.setLeft(defender.getCreaturesInPlay().size());
-            }
-        }
         return result;
     }
 
@@ -353,7 +367,13 @@ public class StaticAbilityCantAttackBlock {
         }
 
         if (stAb.hasParam("Min")) {
-            result.setLeft(AbilityUtils.calculateAmount(stAb.getHostCard(), stAb.getParam("Min"), stAb));
+            if ("All".equals(stAb.getParam("Min"))) {
+                if (defender != null) {
+                    result.setLeft(defender.getCreaturesInPlay().size());
+                }
+            } else {
+                result.setLeft(AbilityUtils.calculateAmount(stAb.getHostCard(), stAb.getParam("Min"), stAb));
+            }
         }
 
         if (stAb.hasParam("Max")) {

@@ -300,3 +300,28 @@ MOJHOSTO_CHANCE_TO_PREFER_JHOIRA_OVER_MOMIR=50
 # attempt this either in its upkeep or its draw phase or main 1).
 MOJHOSTO_CHANCE_TO_USE_JHOIRA_COPY_INSTANT=20
 
+# Master toggle for the following options setting the default AIPreference:SacCost handling.
+SACRIFICE_DEFAULT_PREF_ENABLE=false
+# If a card has no card-specific AIPreference for the Sacrifice cost (AIPreference:SacCost), the AI will still
+# consider the sacrifice of a matching card if its mana value (CMC) matches the specified minimum
+SACRIFICE_DEFAULT_PREF_MIN_CMC=0
+# If a card has no card-specific AIPreference for the Sacrifice cost (AIPreference:SacCost), the AI will still
+# consider the sacrifice of a matching card if its mana value (CMC) matches the specified maximum
+SACRIFICE_DEFAULT_PREF_MAX_CMC=3
+# If a card has no card-specific AIPreference for the Sacrifice cost (AIPreference:SacCost), the AI will still
+# consider the sacrifice of a matching card is a token
+SACRIFICE_DEFAULT_PREF_ALLOW_TOKENS=true
+# A creature should evaluate to no more than this much to be considered for default SacCost preference
+SACRIFICE_DEFAULT_PREF_MAX_CREATURE_EVAL=135
+
+# Enable sideboarding in limited formats (e.g. Sealed, Draft)
+SIDEBOARDING_IN_LIMITED_FORMATS=false
+# Chance to proceed with sideboarding any given pair of cards in the devised sideboarding plan
+SIDEBOARDING_CHANCE_PER_CARD=65
+# Chance to do some sideboarding after winning a game
+SIDEBOARDING_CHANCE_ON_WIN=0
+# Only allow replacing a card with another card that shares the same core types. If disabled, mixing types will be
+# allowed, although a creature is still only replaced with another creature (or planeswalker, see the next option)
+SIDEBOARDING_SHARED_TYPE_ONLY=false
+# Allow replacing a creature with a planeswalker and vice versa when sideboarding
+SIDEBOARDING_PLANESWALKER_EQ_CREATURE=false

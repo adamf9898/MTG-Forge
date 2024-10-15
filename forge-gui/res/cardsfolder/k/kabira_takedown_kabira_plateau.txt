@@ -1,7 +1,7 @@
 Name:Kabira Takedown
 ManaCost:1 W
 Types:Instant
-A:SP$ DealDamage | Cost$ 1 W | NumDmg$ X | ValidTgts$ Creature,Planeswalker | TgtPrompt$ Select target creature or planeswalker | SpellDescription$ CARDNAME deals damage equal to the number of creatures you control to target creature or planeswalker.
+A:SP$ DealDamage | NumDmg$ X | ValidTgts$ Creature,Planeswalker | TgtPrompt$ Select target creature or planeswalker | SpellDescription$ CARDNAME deals damage equal to the number of creatures you control to target creature or planeswalker.
 SVar:X:Count$Valid Creature.YouCtrl
 AlternateMode:Modal
 Oracle:Kabira Takedown deals damage equal to the number of creatures you control to target creature or planeswalker.
@@ -11,6 +11,7 @@ ALTERNATE
 Name:Kabira Plateau
 ManaCost:no cost
 Types:Land
-K:CARDNAME enters the battlefield tapped.
+R:Event$ Moved | ValidCard$ Card.Self | Destination$ Battlefield | ReplacementResult$ Updated | ReplaceWith$ ETBTapped | Description$ CARDNAME enters tapped.
+SVar:ETBTapped:DB$ Tap | Defined$ Self | ETB$ True
 A:AB$ Mana | Cost$ T | Produced$ W | SpellDescription$ Add {W}.
-Oracle:Kabira Plateau enters the battlefield tapped.\n{T}: Add {W}.
+Oracle:Kabira Plateau enters tapped.\n{T}: Add {W}.

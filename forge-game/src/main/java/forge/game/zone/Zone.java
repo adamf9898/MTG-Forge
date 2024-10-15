@@ -31,10 +31,7 @@ import com.google.common.collect.Lists;
 
 import forge.game.Game;
 import forge.game.GameType;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardCollectionView;
-import forge.game.card.CardUtil;
+import forge.game.card.*;
 import forge.game.event.EventValueChangeType;
 import forge.game.event.GameEventZone;
 import forge.game.player.Player;
@@ -85,7 +82,10 @@ public class Zone implements java.io.Serializable, Iterable<Card> {
         add(c, index, null);
     }
     public void add(final Card c, Integer index, final Card latestState) {
-        if (index != null && cardList.isEmpty() && index.intValue() > 0) {
+        add(c, index, latestState, false);
+    }
+    public void add(final Card c, Integer index, final Card latestState, final boolean rollback) {
+        if (index != null && cardList.isEmpty() && index > 0) {
             // something went wrong, most likely the method fired when the game was in an unexpected state
             // (e.g. conceding during the mana payment prompt)
             System.out.println("Warning: tried to add a card to zone with a specific non-zero index, but the zone was empty! Canceling Zone#add to avoid a crash.");
@@ -101,24 +101,30 @@ public class Zone implements java.io.Serializable, Iterable<Card> {
             }
         }
 
-        // Immutable cards are usually emblems and effects
-        if (!c.isImmutable()) {
-            final Zone oldZone = game.getZoneOf(c);
-            final ZoneType zt = oldZone == null ? ZoneType.Stack : oldZone.getZoneType();
+        if (!rollback) {
+            // Immutable cards are usually emblems and effects
+            if (!c.isImmutable()) {
+                final Zone oldZone = game.getZoneOf(c);
+                final ZoneType zt = oldZone == null ? ZoneType.Stack : oldZone.getZoneType();
 
-            // only if the zoneType differs from this
-            // don't go in there is its a control change
-            if (zt != zoneType) {
-                c.setTurnInController(getPlayer());
-                c.setTurnInZone(game.getPhaseHandler().getTurn());
-                if (latestState != null) {
-                    cardsAddedThisTurn.add(zt, latestState);
+                // only if the zoneType differs from this
+                // don't go in there is its a control change
+                if (zt != zoneType) {
+                    c.setTurnInController(getPlayer());
+                    c.setTurnInZone(game.getPhaseHandler().getTurn());
+                    if (latestState != null) {
+                        cardsAddedThisTurn.add(zt, latestState);
+                    }
                 }
             }
-        }
 
-        if (zoneType != ZoneType.Battlefield) {
-            c.setTapped(false);
+            if (zoneType != ZoneType.Battlefield) {
+                c.setTapped(false);
+            }
+
+            if (zoneType == ZoneType.Graveyard && c.isPermanent() && !c.isToken()) {
+                c.getOwner().descend();
+            }
         }
 
         c.setZone(this);
@@ -127,7 +133,7 @@ public class Zone implements java.io.Serializable, Iterable<Card> {
             if (index == null) {
                 cardList.add(c);
             } else {
-                cardList.add(index.intValue(), c);
+                cardList.add(index, c);
             }
         }
         onChanged();
@@ -217,7 +223,7 @@ public class Zone implements java.io.Serializable, Iterable<Card> {
         if (cardsAddedThisTurn.get(origin).contains(card)) {
             List<Card> cardsAddedThisTurnOrigin = getCardsAddedThisTurn(origin);
             int cardIndexOrigin = cardsAddedThisTurnOrigin.lastIndexOf(card);
-            long cardTimestampOrigin = cardsAddedThisTurnOrigin.get(cardIndexOrigin).getTimestamp();
+            long cardTimestampOrigin = cardsAddedThisTurnOrigin.get(cardIndexOrigin).getGameTimestamp();
             // need to check other zones if card didn't change again
             for (ZoneType z : cardsAddedThisTurn.keySet()) {
                 if (z == origin) {
@@ -227,7 +233,7 @@ public class Zone implements java.io.Serializable, Iterable<Card> {
                 if (cardsAddedThisTurn.get(z).contains(card)) {
                     List<Card> cardsAddedThisTurnNonOrigin = getCardsAddedThisTurn(z);
                     int cardIndex = cardsAddedThisTurnNonOrigin.lastIndexOf(card);
-                    long cardTimestamp = cardsAddedThisTurnNonOrigin.get(cardIndex).getTimestamp();
+                    long cardTimestamp = cardsAddedThisTurnNonOrigin.get(cardIndex).getGameTimestamp();
                     // the most recent version of this card did not come from the requested zone
                     if (cardTimestamp > cardTimestampOrigin) {
                         return false;
@@ -284,7 +290,7 @@ public class Zone implements java.io.Serializable, Iterable<Card> {
     public Zone getLKICopy(Map<Integer, Card> cachedMap) {
         Zone result = new Zone(zoneType, game);
 
-        result.setCards(CardUtil.getLKICopyList(getCards(), cachedMap));
+        result.setCards(CardCopyService.getLKICopyList(getCards(), cachedMap));
 
         return result;
     }
@@ -295,6 +301,6 @@ public class Zone implements java.io.Serializable, Iterable<Card> {
         if (zt == zoneType) {
             return;
         }
-        cardsAddedThisTurn.add(zt, CardUtil.getLKICopy(c));
+        cardsAddedThisTurn.add(zt, CardCopyService.getLKICopy(c));
     }
 }

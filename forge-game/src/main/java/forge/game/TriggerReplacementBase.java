@@ -1,10 +1,12 @@
 package forge.game;
 
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Set;
 
 import forge.game.card.Card;
 import forge.game.card.CardState;
+import forge.game.keyword.KeywordInterface;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.Zone;
 import forge.game.zone.ZoneType;
@@ -21,9 +23,16 @@ public abstract class TriggerReplacementBase extends CardTraitBase implements II
     @Override
     public void setHostCard(final Card c) {
         super.setHostCard(c);
-
         if (overridingAbility != null) {
             overridingAbility.setHostCard(c);
+        }
+    }
+
+    @Override
+    public void setKeyword(final KeywordInterface kw) {
+        super.setKeyword(kw);
+        if (overridingAbility != null) {
+            overridingAbility.setKeyword(kw);
         }
     }
 
@@ -38,7 +47,6 @@ public abstract class TriggerReplacementBase extends CardTraitBase implements II
     public Set<ZoneType> getActiveZone() {
         return validHostZones;
     }
-    
     public void setActiveZone(EnumSet<ZoneType> zones) {
         validHostZones = zones;
     }
@@ -78,4 +86,35 @@ public abstract class TriggerReplacementBase extends CardTraitBase implements II
     }
 
     abstract public SpellAbility ensureAbility();
+
+    /* (non-Javadoc)
+     * @see forge.game.CardTraitBase#changeText()
+     */
+    @Override
+    public void changeText() {
+        if (!isIntrinsic()) {
+            return;
+        }
+        super.changeText();
+
+        SpellAbility sa = ensureAbility();
+
+        if (sa != null) {
+            sa.changeText();
+        }
+    }
+
+    /* (non-Javadoc)
+     * @see forge.game.CardTraitBase#changeTextIntrinsic(java.util.Map, java.util.Map)
+     */
+    @Override
+    public void changeTextIntrinsic(Map<String, String> colorMap, Map<String, String> typeMap) {
+        super.changeTextIntrinsic(colorMap, typeMap);
+
+        SpellAbility sa = ensureAbility();
+
+        if (sa != null) {
+            sa.changeTextIntrinsic(colorMap, typeMap);
+        }
+    }
 }

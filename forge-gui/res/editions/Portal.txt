@@ -66,12 +66,12 @@ ScryfallCode=POR
 50 R Cruel Fate @Adrian Smith
 51 U Deep-Sea Serpent @Scott M. Fischer
 52 R Djinn of the Lamp @DiTerlizzi
-53 C Deja Vu @Hannibal King
+53 C Déjà Vu @Hannibal King
 54 R Exhaustion @DiTerlizzi
 55 U Flux @Ted Naifeh
 56 C Giant Octopus @John Matson
 57 C Horned Turtle @Adrian Smith
-57s C Horned Turtle @王玉群
+57s C Horned Turtle @Wang Yuqun
 58 U Ingenious Thief @Dan Frazier
 59 U Man-o'-War @Una Fricker
 60 C Merfolk of the Pearl Trident @DiTerlizzi
@@ -199,7 +199,7 @@ ScryfallCode=POR
 164s C Elven Cache @张艺娜
 165 C Elvish Ranger @DiTerlizzi
 166 C Fruition @Steve Luke
-166s C Fruition @王玉群
+166s C Fruition @Wang Yuqun
 167 C Giant Spider @Randy Gallegos
 168 C Gorilla Warrior @John Matson
 169 C Grizzly Bears @Zina Saunders

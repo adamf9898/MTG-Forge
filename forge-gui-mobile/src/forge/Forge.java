@@ -1,11 +1,7 @@
 package forge;
 
-import com.badlogic.gdx.Application;
-import com.badlogic.gdx.ApplicationListener;
-import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.*;
 import com.badlogic.gdx.Input.Keys;
-import com.badlogic.gdx.Input;
-import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.controllers.Controller;
 import com.badlogic.gdx.controllers.ControllerAdapter;
 import com.badlogic.gdx.controllers.ControllerListener;
@@ -54,7 +50,7 @@ import java.nio.file.Paths;
 import java.util.*;
 
 public class Forge implements ApplicationListener {
-    public static final String CURRENT_VERSION = "1.6.58.001";
+    public static final String CURRENT_VERSION = "1.6.66-SNAPSHOT";
 
     private static ApplicationListener app = null;
     static Scene currentScene = null;
@@ -63,7 +59,7 @@ public class Forge implements ApplicationListener {
     static Batch animationBatch;
     static TextureRegion lastScreenTexture;
     private static boolean sceneWasSwapped = false;
-    public static boolean restrictAdvMenus = false;
+    public static boolean advFreezePlayerControls = false;
     private static Clipboard clipboard;
     private static IDeviceAdapter deviceAdapter;
     private static int screenWidth;
@@ -105,7 +101,6 @@ public class Forge implements ApplicationListener {
     public static boolean isTabletDevice = false;
     public static String locale = "en-US";
     public Assets assets;
-    private ForgePreferences forgePreferences;
     public static boolean hdbuttons = false;
     public static boolean hdstart = false;
     public static boolean isPortraitMode = false;
@@ -148,9 +143,7 @@ public class Forge implements ApplicationListener {
     }
 
     private ForgePreferences getForgePreferences() {
-        if (forgePreferences == null)
-            forgePreferences = new ForgePreferences();
-        return forgePreferences;
+        return GuiBase.getForgePrefs();
     }
     public static Localizer getLocalizer() {
         if (localizer == null)
@@ -1263,8 +1256,11 @@ public class Forge implements ApplicationListener {
 
         @Override
         public boolean touchDown(int x, int y, int pointer, int button) {
-            if (transitionScreen != null)
-                return false;
+            if (transitionScreen != null) {
+                boolean isFDialog = FOverlay.getTopOverlay() != null && FOverlay.getTopOverlay() instanceof FDialog;
+                if (!isFDialog)
+                    return false;
+            }
             if (pointer == 0) { //don't change listeners when second finger goes down for zoom
                 updatePotentialListeners(x, y);
                 if (keyInputAdapter != null) {

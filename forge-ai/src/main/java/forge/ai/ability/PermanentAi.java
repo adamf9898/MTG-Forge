@@ -11,6 +11,7 @@ import forge.card.CardType.Supertype;
 import forge.card.mana.ManaCost;
 import forge.game.card.*;
 import forge.game.cost.Cost;
+import forge.game.keyword.Keyword;
 import forge.game.keyword.KeywordInterface;
 import forge.game.mana.ManaCostBeingPaid;
 import forge.game.phase.PhaseHandler;
@@ -29,7 +30,7 @@ public class PermanentAi extends SpellAbilityAi {
     protected boolean checkPhaseRestrictions(final Player ai, final SpellAbility sa, final PhaseHandler ph) {
         final Card card = sa.getHostCard();
 
-        if (card.hasKeyword("MayFlashSac") && !ai.couldCastSorcery(sa)) {
+        if (card.hasKeyword("MayFlashSac") && !ai.canCastSorcery()) {
             // AiPlayDecision.AnotherTime
             return false;
         }
@@ -153,22 +154,28 @@ public class PermanentAi extends SpellAbilityAi {
             return false;
         }
 
-        if (sa.hasParam("Announce") && sa.getParam("Announce").startsWith("Multikicker")) {
-            // String announce = sa.getParam("Announce");
-            ManaCost mkCost = sa.getMultiKickerManaCost();
+        for (KeywordInterface ki : source.getKeywords(Keyword.MULTIKICKER)) {
+            String o = ki.getOriginal();
+            String costStr = o.split(":")[1];
+            final Cost cost = new Cost(costStr, false);
+            if (!cost.hasManaCost()) {
+                continue;
+            }
+            final ManaCost mkCost = cost.getTotalMana();
+
             ManaCost mCost = sa.getPayCosts().getTotalMana();
             boolean isZeroCost = mCost.isZero();
             for (int i = 0; i < 10; i++) {
                 mCost = ManaCost.combine(mCost, mkCost);
                 ManaCostBeingPaid mcbp = new ManaCostBeingPaid(mCost);
                 if (!ComputerUtilMana.canPayManaCost(mcbp, sa, ai, false)) {
-                    source.setKickerMagnitude(i);
-                    sa.setSVar("Multikicker", String.valueOf(i));
+                    sa.setOptionalKeywordAmount(ki, i);
                     break;
                 }
-                source.setKickerMagnitude(i + 1);
+                sa.setOptionalKeywordAmount(ki, i + 1);
             }
-            if (isZeroCost && source.getKickerMagnitude() == 0) {
+            if (isZeroCost && sa.getOptionalKeywordAmount(ki) == 0) {
+                sa.clearOptionalKeywordAmount();
                 // Bail if the card cost was {0} and no multikicker was paid (e.g. Everflowing Chalice).
                 // TODO: update this if there's ever a card where it makes sense to play it for {0} with no multikicker
                 return false;
@@ -264,8 +271,18 @@ public class PermanentAi extends SpellAbilityAi {
                     if (ai.getLife() < Integer.parseInt(value)) {
                         dontCast = true;
                     }
+                } else if (param.equals("NeverCastIfLifeAbove")) {
+                    // Do not cast this spell if AI life is below a certain threshold
+                    if (ai.getLife() > Integer.parseInt(value)) {
+                        dontCast = true;
+                    }
                 } else if (param.equals("AlwaysCastIfLifeBelow")) {
                     if (ai.getLife() < Integer.parseInt(value)) {
+                        dontCast = false;
+                        break; // disregard other preferences, always cast as a last resort
+                    }
+                } else if (param.equals("AlwaysCastIfLifeAbove")) {
+                    if (ai.getLife() > Integer.parseInt(value)) {
                         dontCast = false;
                         break; // disregard other preferences, always cast as a last resort
                     }

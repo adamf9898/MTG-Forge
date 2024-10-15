@@ -2,7 +2,6 @@ package forge.game;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map.Entry;
 
 import com.google.common.collect.Iterables;
@@ -10,6 +9,7 @@ import com.google.common.eventbus.Subscribe;
 
 import forge.LobbyPlayer;
 import forge.game.card.Card;
+import forge.game.card.CounterEnumType;
 import forge.game.event.*;
 import forge.game.event.GameEventCardDamaged.DamageType;
 import forge.game.player.Player;
@@ -92,11 +92,7 @@ public class GameLogFormatter extends IGameEventVisitor.Base<GameLogEntry> {
         if (event.sa.getTargetRestrictions() != null) {
             StringBuilder sb = new StringBuilder();
 
-            List<TargetChoices> targets = event.sa.getAllTargetChoices();
-            // Include the TargetChoices from the stack instance, since the real target choices
-            // are on that object at this point (see SpellAbilityStackInstance constructor).
-            targets.add(event.si.getTargetChoices());
-            for (TargetChoices ch : targets) {
+            for (TargetChoices ch : event.sa.getAllTargetChoices()) {
                 if (null != ch) {
                     sb.append(ch);
                 }
@@ -143,13 +139,13 @@ public class GameLogFormatter extends IGameEventVisitor.Base<GameLogEntry> {
         for (final GameOutcome game : gamesPlayed) {
             RegisteredPlayer player = game.getWinningPlayer();
 
-            int amount = winCount.containsKey(player) ? winCount.get(player) : 0;
+            int amount = winCount.getOrDefault(player, 0);
             winCount.put(player, amount + 1);
         }
 
         final StringBuilder sb = new StringBuilder();
         for (Entry<RegisteredPlayer, String> entry : players.entrySet()) {
-            int amount = winCount.containsKey(entry.getKey()) ? winCount.get(entry.getKey()) : 0;
+            int amount = winCount.getOrDefault(entry.getKey(), 0);
 
             sb.append(entry.getValue()).append(": ").append(amount).append(" ");
         }
@@ -221,6 +217,20 @@ public class GameLogFormatter extends IGameEventVisitor.Base<GameLogEntry> {
     public GameLogEntry visit(GameEventPlayerPoisoned ev) {
         String message = localizer.getMessage("lblLogPlayerReceivesNPosionCounterFrom",
                             ev.receiver.toString(), String.valueOf(ev.amount), ev.source.toString());
+        return new GameLogEntry(GameLogEntryType.DAMAGE, message);
+    }
+
+    @Override
+    public GameLogEntry visit(GameEventPlayerRadiation ev) {
+        String message;
+        final int change = ev.change;
+        String radCtr = CounterEnumType.RAD.getName().toLowerCase() + " " +
+                Localizer.getInstance().getMessage("lblCounter").toLowerCase();
+        if (change >= 0) message = localizer.getMessage("lblLogPlayerRadiation",
+                ev.receiver.toString(), Lang.nounWithNumeralExceptOne(String.valueOf(change), radCtr),
+                ev.source.toString());
+        else message = localizer.getMessage("lblLogPlayerRadRemove",
+                ev.receiver.toString(), Lang.nounWithNumeralExceptOne(String.valueOf(Math.abs(change)), radCtr));
         return new GameLogEntry(GameLogEntryType.DAMAGE, message);
     }
 

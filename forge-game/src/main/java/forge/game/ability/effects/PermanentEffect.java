@@ -9,10 +9,8 @@ import forge.game.Game;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
-import forge.game.card.CardCollectionView;
 import forge.game.card.CardZoneTable;
 import forge.game.spellability.SpellAbility;
-import forge.game.zone.ZoneType;
 
 public class PermanentEffect extends SpellAbilityEffect {
 
@@ -27,15 +25,8 @@ public class PermanentEffect extends SpellAbilityEffect {
     public void resolve(SpellAbility sa) {
         final Card host = sa.getHostCard();
         final Game game = host.getGame();
-        CardZoneTable table = new CardZoneTable();
-        ZoneType previousZone = host.getZone().getZoneType();
-
-        CardCollectionView lastStateBattlefield = game.copyLastStateBattlefield();
-        CardCollectionView lastStateGraveyard = game.copyLastStateGraveyard();
-
-        Map<AbilityKey, Object> moveParams = AbilityKey.newMap();
-        moveParams.put(AbilityKey.LastStateBattlefield, lastStateBattlefield);
-        moveParams.put(AbilityKey.LastStateGraveyard, lastStateGraveyard);
+        final Map<AbilityKey, Object> moveParams = AbilityKey.newMap();
+        final CardZoneTable table = AbilityKey.addCardZoneTableParams(moveParams, sa);
 
         final Card c = game.getAction().moveToPlay(host, host.getController(), sa, moveParams);
         sa.setHostCard(c);
@@ -51,10 +42,6 @@ public class PermanentEffect extends SpellAbilityEffect {
             registerDelayedTrigger(sa, "Sacrifice", Lists.newArrayList(c));
         }
 
-        ZoneType newZone = c.getZone().getZoneType();
-        if (newZone != previousZone) {
-            table.put(previousZone, newZone, c);
-        }
         table.triggerChangesZoneAll(game, sa);
     }
 }

@@ -37,7 +37,7 @@ public class ReplaceMoved extends ReplacementEffect {
         if (!matchesValidParam("ValidStackSa", runParams.get(AbilityKey.StackSa))) {
             return false;
         }
-        if (!matchesValidParam("Cause", runParams.get(AbilityKey.Cause))) {
+        if (!matchesValidParam("ValidCause", runParams.get(AbilityKey.Cause))) {
             return false;
         }
 
@@ -79,10 +79,23 @@ public class ReplaceMoved extends ReplacementEffect {
             }
         }
 
+        if (hasParam("Discard")) {
+            if (getParam("Discard").equalsIgnoreCase("True") != runParams.containsKey(AbilityKey.Discard)) {
+                return false;
+            }
+        }
+
+        if (hasParam("EffectOnly")) {
+            final Boolean effectOnly = (Boolean) runParams.get(AbilityKey.EffectOnly);
+            if (!effectOnly) {
+                return false;
+            }
+        }
+
         if (hasParam("FoundSearchingLibrary")) {
             if (!runParams.containsKey(AbilityKey.FoundSearchingLibrary)) {
-                    return false;
-                }
+                return false;
+            }
             Boolean val = (Boolean) runParams.get(AbilityKey.FoundSearchingLibrary);
             if (!val) { return false; }
         }
@@ -100,7 +113,8 @@ public class ReplaceMoved extends ReplacementEffect {
     @Override
     public void setReplacingObjects(Map<AbilityKey, Object> runParams, SpellAbility sa) {
         sa.setReplacingObject(AbilityKey.Card, runParams.get(AbilityKey.Affected));
-        sa.setReplacingObjectsFrom(runParams, AbilityKey.NewCard, AbilityKey.CardLKI, AbilityKey.Cause, AbilityKey.LastStateBattlefield, AbilityKey.LastStateGraveyard);
+        sa.setReplacingObjectsFrom(runParams, AbilityKey.NewCard, AbilityKey.CardLKI, AbilityKey.Cause,
+                AbilityKey.LastStateBattlefield, AbilityKey.LastStateGraveyard, AbilityKey.CounterTable, AbilityKey.CounterMap);
     }
 
 }

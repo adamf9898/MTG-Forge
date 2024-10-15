@@ -6,6 +6,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 import forge.StaticData;
+import forge.adventure.data.ConfigData;
 import forge.adventure.data.GeneratedDeckData;
 import forge.adventure.data.GeneratedDeckTemplateData;
 import forge.adventure.data.RewardData;
@@ -18,12 +19,12 @@ import forge.deck.io.DeckSerializer;
 import forge.game.GameFormat;
 import forge.item.BoosterPack;
 import forge.item.PaperCard;
-import forge.item.SealedProduct;
+import forge.item.SealedTemplate;
 import forge.item.generation.UnOpenedProduct;
 import forge.model.FModel;
 import forge.util.Aggregates;
 
-import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -55,6 +56,18 @@ public class CardUtil {
         private final ColorType colorType;
         private final boolean shouldBeEqual;
         private final List<String> deckNeeds=new ArrayList<>();
+        private final String minDate;
+        private final static SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+
+        private static Date parseDate(String date) {
+            if( date.length() <= 7 )
+                date = date + "-01";
+            try {
+                return formatter.parse(date);
+            } catch (Exception e) {
+                return new Date();
+            }
+        }
 
         @Override
         public boolean apply(final PaperCard card) {
@@ -67,6 +80,30 @@ public class CardUtil {
                     if (this.editions.contains(c.getEdition())) {
                         found = true;
                         break;
+                    }
+                }
+                if (!found)
+                    return !this.shouldBeEqual;
+            }
+            if(!this.minDate.isEmpty()) {
+                boolean found = false;
+                List<PaperCard> allPrintings = FModel.getMagicDb().getCommonCards().getAllCards(card.getCardName());
+                List<CardEdition> cardEditionList = new ArrayList<>();
+
+                Date d = parseDate(this.minDate);
+
+                for (CardEdition e : FModel.getMagicDb().getEditions()) {
+                    if (e.getDate().before(d))
+                        continue;
+                    cardEditionList.add(e);
+                }
+
+                for (PaperCard c : allPrintings){
+                    for (CardEdition e : cardEditionList) {
+                        if (e.getCode().equals(c.getEdition())) {
+                            found = true;
+                            break;
+                        }
                     }
                 }
                 if (!found)
@@ -284,6 +321,14 @@ public class CardUtil {
             if(type.deckNeeds!=null&&type.deckNeeds.length!=0){
                 deckNeeds.addAll(Arrays.asList(type.deckNeeds));
             }
+            if(type.minDate!=null&&!type.minDate.isEmpty())
+            {
+                this.minDate=type.minDate;
+            }
+            else
+            {
+                this.minDate="";
+            }
         }
     }
 
@@ -391,7 +436,7 @@ public class CardUtil {
                 }
 
                 packCandidates=new HashMap<>();
-                for(SealedProduct.Template template : StaticData.instance().getSpecialBoosters())
+                for(SealedTemplate template : StaticData.instance().getSpecialBoosters())
                 {
                     if (!editionCodes.contains(template.getEdition().split("\\s",2)[0]))
                         continue;
@@ -668,8 +713,18 @@ public class CardUtil {
 
     public static Deck getDeck(String path, boolean forAI, boolean isFantasyMode, String colors, boolean isTheme, boolean useGeneticAI, CardEdition starterEdition, boolean discourageDuplicates)
     {
-        if(path.endsWith(".dck"))
-            return DeckSerializer.fromFile(new File(Config.instance().getCommonFilePath(path)));
+        if(path.endsWith(".dck")) {
+            FileHandle fileHandle = Config.instance().getFile(path);
+            Deck deck = null;
+            if (fileHandle != null) {
+                deck = DeckSerializer.fromFile(fileHandle.file());
+            }
+            if (deck == null) {
+                deck = DeckgenUtil.getRandomOrPreconOrThemeDeck(colors, true, false, true);
+                System.err.println("Error loading Deck: " + path + "\nGenerating random deck: " + deck.getName());
+            }
+            return deck;
+        }
 
         if(forAI && (isFantasyMode||useGeneticAI)) {
             Deck deck = DeckgenUtil.getRandomOrPreconOrThemeDeck(colors, forAI, isTheme, useGeneticAI);
@@ -710,8 +765,12 @@ public class CardUtil {
     }
 
     public static Deck generateBoosterPackAsDeck(String code){
-
-        if (Arrays.asList(Config.instance().getConfigData().restrictedEditions).contains(code)){
+        ConfigData configData = Config.instance().getConfigData();
+        if (configData.allowedEditions != null) {
+            if (!Arrays.asList(configData.allowedEditions).contains(code)){
+                System.err.println("Cannot generate booster pack, '" + code + "' is not an allowed edition");
+            }
+        } else if (Arrays.asList(configData.restrictedEditions).contains(code)){
             System.err.println("Cannot generate booster pack, '" + code + "' is a restricted edition");
         }
 
@@ -720,14 +779,14 @@ public class CardUtil {
             System.err.println("Set code '" + code + "' not found.");
             return new Deck();
         }
-        BoosterPack cards = BoosterPack.FN_FROM_SET.apply(edition);
+        BoosterPack cards = BoosterPack.fromSet(edition);
         return generateBoosterPackAsDeck(edition);
     }
 
     public static Deck generateBoosterPackAsDeck(CardEdition edition){
         Deck d = new Deck("Booster pack");
         d.setComment(edition.getCode());
-        d.getMain().add(BoosterPack.FN_FROM_SET.apply(edition).getCards());
+        d.getMain().add(BoosterPack.fromSet(edition).getCards());
         return d;
     }
 
@@ -754,6 +813,11 @@ public class CardUtil {
     public static PaperCard getCardByNameAndEdition(String cardName, String edition) {
         List<PaperCard> validCards = Arrays.asList(Iterables.toArray(Iterables.filter(getFullCardPool(Config.instance().getSettingData().useAllCardVariants),
                 input -> input.getCardName().equals(cardName) && input.getEdition().equals(edition)), PaperCard.class));
+
+        if (validCards.isEmpty()) {
+            System.err.println("Unexpected behavior: tried to call getCardByNameAndEdition for card " + cardName + " from the edition " + edition + ", but didn't find it in the DB. A random existing instance will be returned.");
+            return getCardByName(cardName);
+        }
 
         return validCards.get(Current.world().getRandom().nextInt(validCards.size()));
     }

@@ -17,8 +17,6 @@
  */
 package forge.card;
 
-import com.google.common.base.Function;
-
 public enum CardRarity {
     BasicLand("L", "Basic Land"),
     Common("C", "Common"),
@@ -26,7 +24,7 @@ public enum CardRarity {
     Rare("R", "Rare"),
     MythicRare("M", "Mythic Rare"),
     Special("S", "Special"), // Timeshifted
-    None("N", "None"),       // Tokens
+    Token("T", "Token"),     // Tokens
     Unknown("?", "Unknown"); // In development
 
     public static final CardRarity[] FILTER_OPTIONS = new CardRarity[] {
@@ -58,10 +56,4 @@ public enum CardRarity {
         return Unknown;
     }
 
-    public static final Function<CardRarity, String> FN_GET_LONG_NAME = new Function<CardRarity, String>() {
-        @Override
-        public String apply(final CardRarity rarity) {
-            return rarity.longName;
-        }
-    };
 }

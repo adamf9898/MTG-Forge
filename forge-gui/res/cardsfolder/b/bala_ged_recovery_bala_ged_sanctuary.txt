@@ -1,7 +1,7 @@
 Name:Bala Ged Recovery
 ManaCost:2 G
 Types:Sorcery
-A:SP$ ChangeZone | Cost$ 2 G | ValidTgts$ Card.YouOwn | TgtPrompt$ Select target card | Origin$ Graveyard | Destination$ Hand | SpellDescription$ Return target card from your graveyard to your hand.
+A:SP$ ChangeZone | ValidTgts$ Card.YouOwn | TgtPrompt$ Select target card | Origin$ Graveyard | Destination$ Hand | SpellDescription$ Return target card from your graveyard to your hand.
 DeckHas:Ability$Graveyard
 AlternateMode:Modal
 Oracle:Return target card from your graveyard to your hand.
@@ -11,6 +11,7 @@ ALTERNATE
 Name:Bala Ged Sanctuary
 ManaCost:no cost
 Types:Land
-K:CARDNAME enters the battlefield tapped.
+R:Event$ Moved | ValidCard$ Card.Self | Destination$ Battlefield | ReplacementResult$ Updated | ReplaceWith$ ETBTapped | Description$ CARDNAME enters tapped.
+SVar:ETBTapped:DB$ Tap | Defined$ Self | ETB$ True
 A:AB$ Mana | Cost$ T | Produced$ G | SpellDescription$ Add {G}.
-Oracle:Bala Ged Sanctuary enters the battlefield tapped.\n{T}: Add {G}.
+Oracle:Bala Ged Sanctuary enters tapped.\n{T}: Add {G}.

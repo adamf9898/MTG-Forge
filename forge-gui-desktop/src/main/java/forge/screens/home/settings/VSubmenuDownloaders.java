@@ -5,8 +5,6 @@ import java.awt.Font;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
@@ -84,10 +82,9 @@ public enum VSubmenuDownloaders implements IVSubmenu<CSubmenuDownloaders> {
         pnlContent.setOpaque(false);
 
         if (javaRecentEnough()) {
-            // With Blacksmith we would upload the releases and the /latest would redirect to the right URL
-            // That currently doesn't happen so lets comment out this button for now
-//            pnlContent.add(btnCheckForUpdates, constraintsBTN);
-//            pnlContent.add(_makeLabel(localizer.getMessage("lblCheckForUpdates")), constraintsLBL);
+            // Github actions now uploading the latest version predictably. So we should be able to use this again.
+            pnlContent.add(btnCheckForUpdates, constraintsBTN);
+            pnlContent.add(_makeLabel(localizer.getMessage("lblCheckForUpdates")), constraintsLBL);
 
             pnlContent.add(btnDownloadPics, constraintsBTN);
             pnlContent.add(_makeLabel(localizer.getMessage("lblDownloadPics")), constraintsLBL);
@@ -195,22 +192,18 @@ public enum VSubmenuDownloaders implements IVSubmenu<CSubmenuDownloaders> {
         p.setBackgroundTexture(FSkin.getIcon(FSkinProp.BG_TEXTURE));
 
         final FButton btnClose = new FButton(localizer.getMessage("lblOK"));
-        btnClose.addActionListener(new ActionListener() { @Override
-            public void actionPerformed(final ActionEvent arg0) { SOverlayUtils.hideOverlay(); } });
+        btnClose.addActionListener(arg0 -> SOverlayUtils.hideOverlay());
 
         p.add(c, "w 500!");
         p.add(btnClose, "w 200!, h pref+12!, center, gaptop 30");
         overlay.add(p, "gap 0 0 10% 10%");
         SOverlayUtils.showOverlay();
 
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                if (null != onShow) {
-                    onShow.run();
-                }
-                btnClose.requestFocusInWindow();
+        SwingUtilities.invokeLater(() -> {
+            if (null != onShow) {
+                onShow.run();
             }
+            btnClose.requestFocusInWindow();
         });
     }
     
@@ -238,12 +231,9 @@ public enum VSubmenuDownloaders implements IVSubmenu<CSubmenuDownloaders> {
         tar.setCaretPosition(0); // this will move scroll view to the top...
         
         final FButton btnClipboardCopy = new FButton(localizer.getMessage("btnCopyToClipboard"));
-        btnClipboardCopy.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(final ActionEvent arg0) {
-                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(nifSB.toString()), null);
-                SOverlayUtils.hideOverlay();
-            }
+        btnClipboardCopy.addActionListener(arg0 -> {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(nifSB.toString()), null);
+            SOverlayUtils.hideOverlay();
         });
         scr.getParent().add(btnClipboardCopy, "w 200!, h pref+12!, center, gaptop 10");
         
@@ -270,12 +260,9 @@ public enum VSubmenuDownloaders implements IVSubmenu<CSubmenuDownloaders> {
         final FScrollPane scr = new FScrollPane(tar, true, ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
 
-        _showDialog(scr, new Runnable() {
-            @Override
-            public void run() {
-                auditUpdate(tar, scr);
-                scr.getViewport().setViewPosition(new Point(0, 0));
-            }
+        _showDialog(scr, () -> {
+            auditUpdate(tar, scr);
+            scr.getViewport().setViewPosition(new Point(0, 0));
         });
     }
 
@@ -302,9 +289,7 @@ public enum VSubmenuDownloaders implements IVSubmenu<CSubmenuDownloaders> {
         final FScrollPane scr = new FScrollPane(directions, false, ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
-        _showDialog(scr, new Runnable() {
-            @Override public void run() { scr.getViewport().setViewPosition(new Point(0, 0)); }
-        });
+        _showDialog(scr, () -> scr.getViewport().setViewPosition(new Point(0, 0)));
     }
 
     /* (non-Javadoc)

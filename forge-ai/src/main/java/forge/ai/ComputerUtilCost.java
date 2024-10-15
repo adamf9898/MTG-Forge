@@ -1,6 +1,5 @@
 package forge.ai;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -35,6 +34,10 @@ import java.util.Set;
 
 
 public class ComputerUtilCost {
+    private static boolean suppressRecursiveSacCostCheck = false;
+    public static void setSuppressRecursiveSacCostCheck(boolean shouldSuppress) {
+        suppressRecursiveSacCostCheck = shouldSuppress;
+    }
 
     /**
      * Check add m1 m1 counter cost.
@@ -176,14 +179,14 @@ public class ComputerUtilCost {
      *            the remaining life
      * @return true, if successful
      */
-    public static boolean checkDamageCost(final Player ai, final Cost cost, final Card source, final int remainingLife) {
+    public static boolean checkDamageCost(final Player ai, final Cost cost, final Card source, final int remainingLife, final SpellAbility sa) {
         if (cost == null) {
             return true;
         }
         for (final CostPart part : cost.getCostParts()) {
             if (part instanceof CostDamage) {
                 final CostDamage pay = (CostDamage) part;
-                int realDamage = ComputerUtilCombat.predictDamageTo(ai, pay.convertAmount(), source, false);
+                int realDamage = ComputerUtilCombat.predictDamageTo(ai, pay.getAbilityAmount(sa), source, false);
                 if (ai.getLife() - realDamage < remainingLife
                         && realDamage > 0 && !ai.cantLoseForZeroOrLessLife()
                         && ai.canLoseLife()) {
@@ -344,10 +347,14 @@ public class ComputerUtilCost {
         }
         for (final CostPart part : cost.getCostParts()) {
             if (part instanceof CostSacrifice) {
+                if (suppressRecursiveSacCostCheck) {
+                    return false;
+                }
+
                 final CostSacrifice sac = (CostSacrifice) part;
                 final int amount = AbilityUtils.calculateAmount(source, sac.getAmount(), sourceAbility);
 
-                final String type = sac.getType();
+                String type = sac.getType();
 
                 if (type.equals("CARDNAME")) {
                     if (!important) {
@@ -356,11 +363,41 @@ public class ComputerUtilCost {
                     if (!CardLists.filterControlledBy(source.getEnchantedBy(), source.getController()).isEmpty()) {
                         return false;
                     }
+                    if (source.isCreature()) {
+                        // e.g. Sakura-Tribe Elder
+                        final Combat combat = ai.getGame().getCombat();
+                        final boolean beforeNextTurn = ai.getGame().getPhaseHandler().is(PhaseType.END_OF_TURN) && ai.getGame().getPhaseHandler().getNextTurn().equals(ai) && ComputerUtilCard.evaluateCreature(source) <= 150;
+                        final boolean creatureInDanger = ComputerUtil.predictCreatureWillDieThisTurn(ai, source, sourceAbility, false)
+                                && !ComputerUtilCombat.willOpposingCreatureDieInCombat(ai, source, combat);
+                        final int lifeThreshold = ai.getController().isAI() ? (((PlayerControllerAi) ai.getController()).getAi().getIntProperty(AiProps.AI_IN_DANGER_THRESHOLD)) : 4;
+                        final boolean aiInDanger = ai.getLife() <= lifeThreshold && ai.canLoseLife() && !ai.cantLoseForZeroOrLessLife();
+                        if (creatureInDanger && !ComputerUtilCombat.isDangerousToSacInCombat(ai, source, combat)) {
+                            return true;
+                        } else if (aiInDanger || !beforeNextTurn) {
+                            return false;
+                        }
+                    }
                     continue;
                 }
 
-                final CardCollection sacList = new CardCollection();
+                boolean differentNames = false;
+                if (type.contains("+WithDifferentNames")) {
+                    type = type.replace("+WithDifferentNames", "");
+                    differentNames = true;
+                }
+
                 CardCollection typeList = CardLists.getValidCards(ai.getCardsIn(ZoneType.Battlefield), type.split(";"), source.getController(), source, sourceAbility);
+                if (differentNames) {
+                    final Set<Card> uniqueNameCards = Sets.newHashSet();
+                    for (final Card card : typeList) {
+                        // CR 201.2b Those objects have different names only if each of them has at least one name and no two objects in that group have a name in common
+                        if (!card.hasNoName()) {
+                            uniqueNameCards.add(card);
+                        }
+                    }
+                    typeList.clear();
+                    typeList.addAll(uniqueNameCards);
+                }
 
                 // don't sacrifice the card we're pumping
                 typeList = paymentChoicesWithoutTargets(typeList, sourceAbility, ai);
@@ -371,7 +408,6 @@ public class ComputerUtilCost {
                     if (prefCard == null) {
                         return false;
                     }
-                    sacList.add(prefCard);
                     typeList.remove(prefCard);
                     count++;
                 }
@@ -429,18 +465,13 @@ public class ComputerUtilCost {
                  * - block against evasive (flyers, intimidate, etc.)
                  * - break board stall by racing with evasive vehicle
                  */
-                if (sa.hasParam("Crew")) {
+                if (sa.isCrew()) {
                     Card vehicle = AnimateAi.becomeAnimated(source, sa);
                     final int vehicleValue = ComputerUtilCard.evaluateCreature(vehicle);
                     String totalP = type.split("withTotalPowerGE")[1];
                     type = TextUtil.fastReplace(type, TextUtil.concatNoSpace("+withTotalPowerGE", totalP), "");
                     CardCollection exclude = CardLists.getValidCards(ai.getCardsIn(ZoneType.Battlefield), type.split(";"), source.getController(), source, sa);
-                    exclude = CardLists.filter(exclude, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(final Card c) {
-                            return ComputerUtilCard.evaluateCreature(c) >= vehicleValue;
-                        }
-                    }); // exclude creatures >= vehicle
+                    exclude = CardLists.filter(exclude, c -> ComputerUtilCard.evaluateCreature(c) >= vehicleValue); // exclude creatures >= vehicle
                     exclude.addAll(alreadyTapped);
                     CardCollection tappedCrew = ComputerUtil.chooseTapTypeAccumulatePower(ai, type, sa, true, Integer.parseInt(totalP), exclude);
                     if (tappedCrew != null) {
@@ -500,11 +531,12 @@ public class ComputerUtilCost {
             sa.setActivatingPlayer(player, true); // complaints on NPE had came before this line was added.
         }
 
-        final boolean cannotBeCountered = !CardFactoryUtil.isCounterable(sa.getHostCard());
+        boolean cannotBeCountered = false;
 
         // Check for stuff like Nether Void
         int extraManaNeeded = 0;
         if (sa instanceof Spell) {
+            cannotBeCountered = !sa.isCounterableBy(null);
             for (Card c : player.getGame().getCardsIn(ZoneType.Battlefield)) {
                 final String snem = c.getSVar("AI_SpellsNeedExtraMana");
                 if (!StringUtils.isBlank(snem)) {
@@ -578,18 +610,15 @@ public class ComputerUtilCost {
                     CardCollectionView nonManaSources =
                             CardLists.getValidCards(player.getCardsIn(ZoneType.Battlefield), part.getType().split(";"),
                                     sa.getActivatingPlayer(), sa.getHostCard(), sa);
-                    nonManaSources = CardLists.filter(nonManaSources, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(Card card) {
-                            boolean hasManaSa = false;
-                            for (final SpellAbility sa : card.getSpellAbilities()) {
-                                if (sa.isManaAbility() && sa.getPayCosts().hasTapCost()) {
-                                    hasManaSa = true;
-                                    break;
-                                }
+                    nonManaSources = CardLists.filter(nonManaSources, card -> {
+                        boolean hasManaSa = false;
+                        for (final SpellAbility sa1 : card.getSpellAbilities()) {
+                            if (sa1.isManaAbility() && sa1.getPayCosts().hasTapCost()) {
+                                hasManaSa = true;
+                                break;
                             }
-                            return !hasManaSa;
                         }
+                        return !hasManaSa;
                     });
                     if (nonManaSources.size() < part.convertAmount()) {
                         return false;
@@ -598,8 +627,22 @@ public class ComputerUtilCost {
             }
         }
 
+        // Bail early on Casualty in case there are no cards that would make sense to pay with
+        if (sa.getHostCard().hasKeyword(Keyword.CASUALTY)) {
+            for (final CostPart part : sa.getPayCosts().getCostParts()) {
+                if (part instanceof CostSacrifice) {
+                    CardCollection valid = CardLists.getValidCards(player.getCardsIn(ZoneType.Battlefield), part.getType().split(";"),
+                            sa.getActivatingPlayer(), sa.getHostCard(), sa);
+                    valid = CardLists.filter(valid, Predicates.not(CardPredicates.hasSVar("AIDontSacToCasualty")));
+                    if (valid.isEmpty()) {
+                        return false;
+                    }
+                }
+            }
+        }
+
         return ComputerUtilMana.canPayManaCost(sa, player, extraManaNeeded, effect)
-                && CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa);
+                && CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa, effect);
     }
 
     public static boolean willPayUnlessCost(SpellAbility sa, Player payer, Cost cost, boolean alreadyPaid, FCollectionView<Player> payers) {
@@ -658,7 +701,7 @@ public class ComputerUtilCost {
         } else if ("LowPriority".equals(aiLogic) && MyRandom.getRandom().nextInt(100) < 67) {
             return false;
         } else if (aiLogic != null && aiLogic.startsWith("Fabricate")) {
-            final int n = Integer.valueOf(aiLogic.substring("Fabricate".length()));
+            final int n = Integer.parseInt(aiLogic.substring("Fabricate".length()));
 
             // if host would leave the play or if host is useless, create tokens
             if (source.hasSVar("EndOfTurnLeavePlay") || ComputerUtilCard.isUselessCreature(payer, source)) {
@@ -667,7 +710,7 @@ public class ComputerUtilCost {
 
             // need a copy for one with extra +1/+1 counter boost,
             // without causing triggers to run
-            final Card copy = CardUtil.getLKICopy(source);
+            final Card copy = CardCopyService.getLKICopy(source);
             copy.setCounters(CounterEnumType.P1P1, copy.getCounters(CounterEnumType.P1P1) + n);
             copy.setZone(source.getZone());
 
@@ -723,6 +766,8 @@ public class ComputerUtilCost {
             int evalToken = ComputerUtilCard.evaluateCreatureList(tokenList);
 
             return evalToken < evalCounter;
+        } else if ("Riot".equals(aiLogic)) {
+            return !SpecialAiLogic.preferHasteForRiot(sa, payer);
         }
 
         // Check for shocklands and similar ETB replacement effects
@@ -760,7 +805,7 @@ public class ComputerUtilCost {
         if (ApiType.Counter.equals(sa.getApi())) {
             List<SpellAbility> spells = AbilityUtils.getDefinedSpellAbilities(source, sa.getParamOrDefault("Defined", "Targeted"), sa);
             for (SpellAbility toBeCountered : spells) {
-                if (toBeCountered.isSpell() && !CardFactoryUtil.isCounterable(toBeCountered.getHostCard())) {
+                if (!toBeCountered.isCounterableBy(sa)) {
                     return false;
                 }
                 // no reason to pay if we don't plan to confirm
@@ -775,7 +820,7 @@ public class ComputerUtilCost {
         // Didn't have any of the data on the original SA to pay dependant costs
 
         return checkLifeCost(payer, cost, source, 4, sa)
-                && checkDamageCost(payer, cost, source, 4)
+                && checkDamageCost(payer, cost, source, 4, sa)
                 && (isMine || checkSacrificeCost(payer, cost, source, sa))
                 && (isMine || checkDiscardCost(payer, cost, source, sa))
                 && (!source.getName().equals("Tyrannize") || payer.getCardsIn(ZoneType.Hand).size() > 2)

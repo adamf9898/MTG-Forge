@@ -1,13 +1,7 @@
 package forge.game.player;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-
 import forge.LobbyPlayer;
 import forge.deck.CardPool;
 import forge.deck.Deck;
@@ -16,14 +10,18 @@ import forge.game.GameType;
 import forge.item.IPaperCard;
 import forge.item.PaperCard;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
 public class RegisteredPlayer {
     private final Deck originalDeck; // never return or modify this instance (it's a reference to game resources)
     private Deck currentDeck;
 
-    private static final Iterable<PaperCard> EmptyList = Collections.unmodifiableList(new ArrayList<>());
-    
+    private static final Iterable<PaperCard> EmptyList = Collections.emptyList();
+
     private LobbyPlayer player = null;
-    
+
     private int startingLife = 20;
     private int startingHand = 7;
     private int manaShards = 0;
@@ -33,34 +31,34 @@ public class RegisteredPlayer {
     private Iterable<? extends IPaperCard> schemes = null;
     private Iterable<PaperCard> planes = null;
     private Iterable<PaperCard> conspiracies = null;
+    private Iterable<PaperCard> attractions = null;
     private List<PaperCard> commanders = Lists.newArrayList();
     private List<PaperCard> vanguardAvatars = null;
     private PaperCard planeswalker = null;
     private int teamNumber = -1; // members of teams with negative id will play FFA.
+    private Integer id = null;
     private boolean randomFoil = false;
     private boolean enableETBCountersEffect = false;
-    
+
     public RegisteredPlayer(Deck deck0) {
         originalDeck = deck0;
         restoreDeck();
     }
 
+    public final Integer getId() {
+        return id;
+    }
+    public final void setId(Integer id0) {
+        id = id0;
+    }
+
     public final Deck getDeck() {
         return currentDeck;
     }
-    
+
     public final int getStartingLife() {
         return startingLife;
     }
-    public final Iterable<? extends IPaperCard> getCardsOnBattlefield() {
-        return Iterables.concat(cardsOnBattlefield == null ? EmptyList : cardsOnBattlefield,
-                extraCardsOnBattlefield == null ? EmptyList : extraCardsOnBattlefield);
-    }
-
-    public final Iterable<? extends IPaperCard> getExtraCardsInCommandZone() {
-        return extraCardsInCommandZone == null ? EmptyList : extraCardsInCommandZone;
-    }
-
     public final void setStartingLife(int startingLife) {
         this.startingLife = startingLife;
     }
@@ -68,7 +66,6 @@ public class RegisteredPlayer {
     public final int getManaShards() {
         return manaShards;
     }
-
     public final void setManaShards(int manaShards) {
         this.manaShards = manaShards;
     }
@@ -78,6 +75,15 @@ public class RegisteredPlayer {
     }
     public void setEnableETBCountersEffect(boolean value) {
         enableETBCountersEffect = value;
+    }
+
+    public final Iterable<? extends IPaperCard> getCardsOnBattlefield() {
+        return Iterables.concat(cardsOnBattlefield == null ? EmptyList : cardsOnBattlefield,
+                extraCardsOnBattlefield == null ? EmptyList : extraCardsOnBattlefield);
+    }
+
+    public final Iterable<? extends IPaperCard> getExtraCardsInCommandZone() {
+        return extraCardsInCommandZone == null ? EmptyList : extraCardsInCommandZone;
     }
 
     public final void setCardsOnBattlefield(Iterable<IPaperCard> cardsOnTable) {
@@ -128,7 +134,6 @@ public class RegisteredPlayer {
     public int getTeamNumber() {
         return teamNumber;
     }
-
     public void setTeamNumber(int teamNumber0) {
         this.teamNumber = teamNumber0;
     }
@@ -144,7 +149,7 @@ public class RegisteredPlayer {
     		final Set<GameType> appliedVariants, final Deck deck,	              //General vars
     		final Iterable<PaperCard> schemes, final boolean playerIsArchenemy,   //Archenemy specific vars
     		final Iterable<PaperCard> planes, final CardPool vanguardAvatar) {   //Planechase and Vanguard
-        
+
     	RegisteredPlayer start = new RegisteredPlayer(deck);
     	if (appliedVariants.contains(GameType.Archenemy) && playerIsArchenemy) {
     		start.setStartingLife(40); // 904.5: The Archenemy has 40 life.
@@ -183,7 +188,6 @@ public class RegisteredPlayer {
     public LobbyPlayer getPlayer() {
         return player;
     }
-
     public RegisteredPlayer setPlayer(LobbyPlayer player0) {
         this.player = player0;
         return this;
@@ -210,7 +214,6 @@ public class RegisteredPlayer {
             setStartingLife(getStartingLife() + avatar.getRules().getLife());
             setStartingHand(getStartingHand() + avatar.getRules().getHand());
         }
-
     }
 
     public PaperCard getPlaneswalker() {
@@ -223,8 +226,18 @@ public class RegisteredPlayer {
         }
     }
 
+    public Iterable<PaperCard> getAttractions() {
+        return attractions;
+    }
+    private void assignAttractions() {
+        attractions = currentDeck.has(DeckSection.Attractions)
+                ? currentDeck.get(DeckSection.Attractions).toFlatList()
+                : EmptyList;
+    }
+
     public void restoreDeck() {
         currentDeck = (Deck) originalDeck.copyTo(originalDeck.getName());
+        assignAttractions();
     }
 
     public boolean useRandomFoil() {

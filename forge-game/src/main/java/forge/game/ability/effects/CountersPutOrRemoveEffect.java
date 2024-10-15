@@ -76,7 +76,7 @@ public class CountersPutOrRemoveEffect extends SpellAbilityEffect {
             // gameCard is LKI in that case, the card is not in game anymore
             // or the timestamp did change
             // this should check Self too
-            if (gameCard == null || !tgtCard.equalsWithTimestamp(gameCard)) {
+            if (gameCard == null || !tgtCard.equalsWithGameTimestamp(gameCard)) {
                 continue;
             }
             if (!eachExisting && sa.hasParam("Optional") && !pl.getController().confirmAction(sa, null,
@@ -115,7 +115,7 @@ public class CountersPutOrRemoveEffect extends SpellAbilityEffect {
         CounterType chosenType = pc.chooseCounterType(list, sa, prompt, params);
 
         params.put("CounterType", chosenType);
-        prompt = Localizer.getInstance().getMessage("lblWhatToDoWithTargetCounter",  chosenType.getName()) + " ";
+        prompt = Localizer.getInstance().getMessage("lblWhatToDoWithTargetCounter",  chosenType.getName(), CardTranslation.getTranslatedName(tgtCard.getName())) + " ";
         boolean putCounter;
         if (sa.hasParam("RemoveConditionSVar")) {
             final Card host = sa.getHostCard();
@@ -127,13 +127,24 @@ public class CountersPutOrRemoveEffect extends SpellAbilityEffect {
 
             putCounter = !Expressions.compare(value, operator, operandValue);
         } else {
-            putCounter = pc.chooseBinary(sa, prompt, BinaryChoiceType.AddOrRemove, params);
+            boolean canReceive = tgtCard.canReceiveCounters(ctype);
+            boolean canRemove = tgtCard.canRemoveCounters(ctype);
+            if (!canReceive && !canRemove) {
+                return;
+            }
+            if (canReceive && !canRemove) {
+                putCounter = true;
+            } else if (!canReceive && canRemove) {
+                putCounter = false;
+            } else {
+                putCounter = pc.chooseBinary(sa, prompt, BinaryChoiceType.AddOrRemove, params);
+            }
         }
 
         if (putCounter) {
             tgtCard.addCounter(chosenType, counterAmount, pl, table);
         } else {
-            tgtCard.subtractCounter(chosenType, counterAmount);
+            tgtCard.subtractCounter(chosenType, counterAmount, pl);
             if (sa.hasParam("RememberRemovedCards")) {
                 sa.getHostCard().addRemembered(tgtCard);
             }

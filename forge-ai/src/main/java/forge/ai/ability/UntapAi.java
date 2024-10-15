@@ -1,6 +1,5 @@
 package forge.ai.ability;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 import forge.ai.*;
@@ -64,14 +63,12 @@ public class UntapAi extends SpellAbilityAi {
             return false;
         }
 
-        if (!sa.usesTargeting()) {
-            final List<Card> pDefined = AbilityUtils.getDefinedCards(source, sa.getParam("Defined"), sa);
-            return pDefined.isEmpty() || (pDefined.get(0).isTapped() && pDefined.get(0).getController() == ai);
-        } else {
-            // If we already selected a target just use that
-
+        if (sa.usesTargeting()) {
             return untapPrefTargeting(ai, sa, false);
         }
+
+        final List<Card> pDefined = AbilityUtils.getDefinedCards(source, sa.getParam("Defined"), sa);
+        return pDefined.isEmpty() || (pDefined.get(0).isTapped() && pDefined.get(0).getController() == ai);
     }
 
     @Override
@@ -134,11 +131,11 @@ public class UntapAi extends SpellAbilityAi {
         }
         sa.resetTargets();
 
-        final PlayerCollection targetController = new PlayerCollection();
-        if (sa.isCurse()) {
-            targetController.addAll(ai.getOpponents());
+        final PlayerCollection targetController;
+        if (sa.isCurse() || (sa.getSubAbility() != null && sa.getSubAbility().getApi() == ApiType.GainControl)) {
+            targetController = ai.getOpponents();
         } else {
-            targetController.add(ai);
+            targetController = ai.getYourTeam();
         }
 
         CardCollection list = CardLists.getTargetableCards(targetController.getCardsIn(ZoneType.Battlefield), sa);
@@ -410,18 +407,15 @@ public class UntapAi extends SpellAbilityAi {
         // (it may actually be possible to enable this for sorceries, but that'll need some canPlay shenanigans)
         CardCollection playable = CardLists.filter(inHand, Presets.PERMANENTS);
 
-        CardCollection untappingCards = CardLists.filter(ai.getCardsIn(ZoneType.Battlefield), new Predicate<Card>() {
-            @Override
-            public boolean apply(Card card) {
-                boolean hasUntapLandLogic = false;
-                for (SpellAbility sa : card.getSpellAbilities()) {
-                    if ("PoolExtraMana".equals(sa.getParam("AILogic"))) {
-                        hasUntapLandLogic = true;
-                        break;
-                    }
+        CardCollection untappingCards = CardLists.filter(ai.getCardsIn(ZoneType.Battlefield), card -> {
+            boolean hasUntapLandLogic = false;
+            for (SpellAbility sa1 : card.getSpellAbilities()) {
+                if ("PoolExtraMana".equals(sa1.getParam("AILogic"))) {
+                    hasUntapLandLogic = true;
+                    break;
                 }
-                return hasUntapLandLogic && card.isUntapped();
             }
+            return hasUntapLandLogic && card.isUntapped();
         });
 
         // TODO: currently limited to Main 2, somehow improve to let the AI use this SA at other time?
@@ -445,7 +439,7 @@ public class UntapAi extends SpellAbilityAi {
 
                             // pool one additional mana by tapping a land to try to ramp to something
                             CardCollection manaLands = CardLists.filter(ai.getCardsIn(ZoneType.Battlefield),
-                                    Presets.LANDS_PRODUCING_MANA, Presets.UNTAPPED);
+                                    Presets.LANDS_PRODUCING_MANA, Presets.CAN_TAP);
                             manaLands = CardLists.getValidCards(manaLands, sa.getParam("ValidTgts"), ai, source, null);
 
                             if (manaLands.isEmpty()) {

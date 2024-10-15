@@ -20,12 +20,15 @@ import forge.game.card.CardPredicates;
 import forge.game.card.CardState;
 import forge.game.card.CardView;
 import forge.game.card.IHasCardView;
+import forge.game.keyword.Keyword;
 import forge.game.keyword.KeywordInterface;
+import forge.game.player.GameLossReason;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.Trigger;
 import forge.game.zone.ZoneType;
 import forge.util.Expressions;
+import forge.util.ITranslatable;
 
 /**
  * Base class for Triggers,ReplacementEffects and StaticAbilities.
@@ -63,7 +66,7 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
      * Keys that should not changed
      */
     private static final ImmutableList<String> noChangeKeys = ImmutableList.<String>builder()
-            .add("TokenScript", "LegacyImage", "TokenImage", "NewName", "ChooseFromList")
+            .add("TokenScript", "TokenImage", "NewName" , "DefinedName", "ChooseFromList")
             .add("AddAbility").build();
 
     /**
@@ -84,6 +87,10 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
 
     public String getParam(String key) {
         return mapParams.get(key);
+    }
+
+    public String getOriginalParam(String key) {
+        return originalMapParams.get(key);
     }
 
     public boolean hasParam(String key) {
@@ -141,11 +148,21 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
         this.hostCard = c;
     }
 
+    public boolean isKeyword(Keyword kw) {
+        return this.keyword != null && this.keyword.getKeyword() == kw;
+    }
     public KeywordInterface getKeyword() {
         return this.keyword;
     }
     public void setKeyword(final KeywordInterface kw) {
         this.keyword = kw;
+    }
+
+    public boolean isEmbalm() {
+        return isKeyword(Keyword.EMBALM);
+    }
+    public boolean isEternalize() {
+        return isKeyword(Keyword.ETERNALIZE);
     }
 
     /**
@@ -155,7 +172,7 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
      *
      * @return a boolean.
      */
-    public final boolean isSecondary() {
+    public boolean isSecondary() {
         return getParamOrDefault("Secondary", "False").equals("True");
     }
 
@@ -219,6 +236,13 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
                     return true;
                 }
             }
+        } else if (o instanceof GameLossReason) {
+            for (String s : valids) {
+                GameLossReason valid = GameLossReason.smartValueOf(s);
+                if (((GameLossReason) o).name().equals(valid.name())) {
+                    return true;
+                }
+            }
         }
 
         return false;
@@ -229,10 +253,11 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
     }
 
     public boolean matchesValidParam(String param, final Object o, final Card srcCard) {
+        boolean result = hasParam("Invert" + param);
         if (hasParam(param) && !matchesValid(o, getParam(param).split(","), srcCard)) {
-            return false;
+            return result;
         }
-        return true;
+        return !result;
     }
 
     public boolean matchesValidParam(String param, final Object o) {
@@ -286,7 +311,10 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
             if ("True".equalsIgnoreCase(params.get("Bloodthirst")) != hostController.hasBloodthirst()) return false;
         }
         if (params.containsKey("FatefulHour")) {
-            if ("True".equalsIgnoreCase(params.get("FatefulHour")) != (hostController.getLife() > 5)) return false;
+            if ("True".equalsIgnoreCase(params.get("FatefulHour")) != (hostController.getLife() <= 5)) return false;
+        }
+        if (params.containsKey("Monarch")) {
+            if ("True".equalsIgnoreCase(params.get("Monarch")) != hostController.isMonarch()) return false;
         }
         if (params.containsKey("Revolt")) {
             if ("True".equalsIgnoreCase(params.get("Revolt")) != hostController.hasRevolt()) return false;
@@ -396,15 +424,20 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
             if (params.containsKey("PresentZone")) {
                 presentZone = ZoneType.smartValueOf(params.get("PresentZone"));
             }
-            CardCollection list = new CardCollection();
-            if (presentPlayer.equals("You") || presentPlayer.equals("Any")) {
-                list.addAll(hostController.getCardsIn(presentZone));
-            }
-            if (presentPlayer.equals("Opponent") || presentPlayer.equals("Any")) {
-                list.addAll(hostController.getOpponents().getCardsIn(presentZone));
-            }
-            if (presentPlayer.equals("Any")) {
-                list.addAll(hostController.getAllies().getCardsIn(presentZone));
+            CardCollection list;
+            if (params.containsKey("PresentDefined")) {
+                list = AbilityUtils.getDefinedCards(getHostCard(), params.get("PresentDefined"), this);
+            } else {
+                list = new CardCollection();
+                if (presentPlayer.equals("You") || presentPlayer.equals("Any")) {
+                    list.addAll(hostController.getCardsIn(presentZone));
+                }
+                if (presentPlayer.equals("Opponent") || presentPlayer.equals("Any")) {
+                    list.addAll(hostController.getOpponents().getCardsIn(presentZone));
+                }
+                if (presentPlayer.equals("Any")) {
+                    list.addAll(hostController.getAllies().getCardsIn(presentZone));
+                }
             }
             list = CardLists.getValidCards(list, sIsPresent, hostController, this.getHostCard(), this);
 
@@ -531,37 +564,15 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
         return true;
     }
 
-    public void changeText() {
-        // copy changed text words into card trait there
-        this.changedTextColors = getHostCard().getChangedTextColorWords();
-        this.changedTextTypes = getHostCard().getChangedTextTypeWords();
-
-        for (final String key : this.mapParams.keySet()) {
-            final String value = this.originalMapParams.get(key), newValue;
-            if (noChangeKeys.contains(key)) {
-                continue;
-            } else if (descriptiveKeys.contains(key)) {
-                // change descriptions differently
-                newValue = AbilityUtils.applyDescriptionTextChangeEffects(value, this);
-            } else if (this.getHostCard().hasSVar(value)) {
-                // don't change literal SVar names!
-                newValue = null;
-            } else {
-                newValue = AbilityUtils.applyAbilityTextChangeEffects(value, this);
-            }
-
-            if (newValue != null) {
-                this.mapParams.put(key, newValue);
-            }
-        }
-    }
-
     @Override
     public CardView getCardView() {
         return CardView.get(hostCard);
     }
 
     protected IHasSVars getSVarFallback() {
+        if (this.getKeyword() != null && this.getKeyword().getStatic() != null) {
+            return this.getKeyword().getStatic();
+        }
         if (getCardState() != null)
             return getCardState();
         return getHostCard();
@@ -632,6 +643,14 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
         return getCardState().getView().getState();
     }
 
+    public ITranslatable getHostName(CardTraitBase node) {
+        // if alternate state is viewed while card uses original
+        if (node.isIntrinsic() && node.cardState != null && !node.cardState.getStateName().equals(getHostCard().getCurrentStateName())) {
+            return node.cardState;
+        }
+        return node.getHostCard();
+    }
+
     public Card getOriginalHost() {
         if (getCardState() != null)
             return getCardState().getCard();
@@ -664,7 +683,7 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
         Map<String, String> result = Maps.newHashMap(output);
         for (Map.Entry<String, String> e : input.entrySet()) {
             String value = e.getValue();
-            result.put(e.getKey(), output.containsKey(value) ? output.get(value) : value);
+            result.put(e.getKey(), output.getOrDefault(value, value));
         }
         return result;
     }
@@ -694,9 +713,37 @@ public abstract class CardTraitBase extends GameObject implements IHasCardView, 
         this.originalMapParams = Maps.newHashMap(this.mapParams);
     }
 
+    public void changeText() {
+        // copy changed text words into card trait there
+        this.changedTextColors = getHostCard().getChangedTextColorWords();
+        this.changedTextTypes = getHostCard().getChangedTextTypeWords();
+
+        for (final String key : this.mapParams.keySet()) {
+            final String value = this.originalMapParams.get(key), newValue;
+            if (noChangeKeys.contains(key)) {
+                continue;
+            } else if (descriptiveKeys.contains(key)) {
+                // change descriptions differently
+                newValue = AbilityUtils.applyDescriptionTextChangeEffects(value, this);
+            } else if (this.getHostCard().hasSVar(value)) {
+                // don't change literal SVar names!
+                newValue = null;
+            } else {
+                newValue = AbilityUtils.applyAbilityTextChangeEffects(value, this);
+            }
+
+            if (newValue != null) {
+                this.mapParams.put(key, newValue);
+            }
+        }
+    }
+
     protected void copyHelper(CardTraitBase copy, Card host) {
+        copyHelper(copy, host, false);
+    }
+    protected void copyHelper(CardTraitBase copy, Card host, boolean keepTextChanges) {
         copy.originalMapParams = Maps.newHashMap(originalMapParams);
-        copy.mapParams = Maps.newHashMap(originalMapParams);
+        copy.mapParams = Maps.newHashMap(keepTextChanges ? mapParams : originalMapParams);
         copy.setSVars(sVars);
         copy.setCardState(cardState);
         // dont use setHostCard to not trigger the not copied parts yet

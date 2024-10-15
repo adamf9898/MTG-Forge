@@ -9,8 +9,10 @@ import com.google.common.collect.*;
 
 import forge.game.CardTraitBase;
 import forge.game.Game;
+import forge.game.GameAction;
 import forge.game.ability.AbilityKey;
 import forge.game.player.PlayerCollection;
+import forge.game.replacement.ReplacementType;
 import forge.game.spellability.SpellAbility;
 import forge.game.trigger.TriggerType;
 import forge.game.zone.ZoneType;
@@ -22,11 +24,48 @@ public class CardZoneTable extends ForwardingTable<ZoneType, ZoneType, CardColle
     private CardCollection createdTokens = new CardCollection();
     private PlayerCollection firstTimeTokenCreators = new PlayerCollection();
 
-    public CardZoneTable(Table<ZoneType, ZoneType, CardCollection> cardZoneTable) {
-        this.putAll(cardZoneTable);
+    private CardCollectionView lastStateBattlefield;
+    private CardCollectionView lastStateGraveyard;
+    
+    public CardZoneTable() {
+        this(null, null);
     }
 
-    public CardZoneTable() {
+    public CardZoneTable(CardCollectionView lastStateBattlefield, CardCollectionView lastStateGraveyard) {
+        setLastStateBattlefield(lastStateBattlefield);
+        setLastStateGraveyard(lastStateGraveyard);
+    }
+
+    public CardZoneTable(CardZoneTable cardZoneTable) {
+        this.putAll(cardZoneTable);
+        lastStateBattlefield = cardZoneTable.getLastStateBattlefield();
+        lastStateGraveyard = cardZoneTable.getLastStateGraveyard();
+    }
+
+    public static CardZoneTable getSimultaneousInstance(SpellAbility sa) {
+        if (sa.isReplacementAbility() && sa.getReplacementEffect().getMode() == ReplacementType.Moved
+                && sa.getReplacingObject(AbilityKey.InternalTriggerTable) != null) {
+            // if a RE changes the destination zone try to make it simultaneous
+            return (CardZoneTable) sa.getReplacingObject(AbilityKey.InternalTriggerTable);    
+        }
+        GameAction ga = sa.getHostCard().getGame().getAction();
+        return new CardZoneTable(
+                ga.getLastState(AbilityKey.LastStateBattlefield, sa, null, true),
+                ga.getLastState(AbilityKey.LastStateGraveyard, sa, null, true));
+    }
+
+    public CardCollectionView getLastStateBattlefield() {
+        return lastStateBattlefield;
+    }
+    public CardCollectionView getLastStateGraveyard() {
+        return lastStateGraveyard;
+    }
+    public void setLastStateBattlefield(CardCollectionView lastState) {
+        // store it in a new object, it might be from Game which can also refresh itself
+        lastStateBattlefield = lastState == null ? CardCollection.EMPTY : new CardCollection(lastState);
+    }
+    public void setLastStateGraveyard(CardCollectionView lastState) {
+        lastStateGraveyard = lastState == null ? CardCollection.EMPTY : new CardCollection(lastState);
     }
 
     /**
@@ -57,7 +96,20 @@ public class CardZoneTable extends ForwardingTable<ZoneType, ZoneType, CardColle
 
     public void triggerChangesZoneAll(final Game game, final SpellAbility cause) {
         triggerTokenCreatedOnce(game);
+        if (cause != null && cause.getReplacingObject(AbilityKey.InternalTriggerTable) == this) {
+            // will be handled by original "cause" instead
+            return;
+        }
         if (!isEmpty()) {
+            // this should still refresh for empty battlefield
+            if (lastStateBattlefield != CardCollection.EMPTY) {
+                game.getTriggerHandler().resetActiveTriggers(false);
+                // register all LTB trigger from last state battlefield
+                for (Card lki : lastStateBattlefield) {
+                    game.getTriggerHandler().registerActiveLTBTrigger(lki);
+                }
+            }
+
             final Map<AbilityKey, Object> runParams = AbilityKey.newMap();
             runParams.put(AbilityKey.Cards, new CardZoneTable(this));
             runParams.put(AbilityKey.Cause, cause);
@@ -79,28 +131,51 @@ public class CardZoneTable extends ForwardingTable<ZoneType, ZoneType, CardColle
         }
     }
 
-    public CardCollection filterCards(Iterable<ZoneType> origin, ZoneType destination, String valid, Card host, CardTraitBase sa) {
+    public CardCollection filterCards(Iterable<ZoneType> origin, Iterable<ZoneType> destination, String valid, Card host, CardTraitBase sa) {
         CardCollection allCards = new CardCollection();
-        if (destination != null) {
-            if (!containsColumn(destination)) {
-                return allCards;
-            }
+        if (destination != null && !Iterables.any(destination, d -> columnKeySet().contains(d))) {
+            return allCards;
         }
         if (origin != null) {
             for (ZoneType z : origin) {
                 if (containsRow(z)) {
+                    CardCollectionView lkiLookup = CardCollection.EMPTY;
+                    // CR 603.10a
+                    if (z == ZoneType.Battlefield) {
+                        lkiLookup = lastStateBattlefield;
+                    }
+                    if (z == ZoneType.Graveyard && destination == null) {
+                        lkiLookup = lastStateGraveyard;
+                    }
                     if (destination != null) {
-                        allCards.addAll(row(z).get(destination));
+                        for (ZoneType zt : destination) {
+                            if (row(z).containsKey(zt)) {
+                                for (Card c : row(z).get(zt)) {
+                                    if (lkiLookup != CardCollection.EMPTY && !lkiLookup.contains(c)) {
+                                        // this can happen if e. g. a mutated permanent dies
+                                        continue;
+                                    }
+                                    allCards.add(lkiLookup.get(c));
+                                }
+                            }
+                        }
                     } else {
-                        for (CardCollection c : row(z).values()) {
-                            allCards.addAll(c);
+                        for (CardCollection cc : row(z).values()) {
+                            for (Card c : cc) {
+                                if (lkiLookup != CardCollection.EMPTY && !lkiLookup.contains(c)) {
+                                    continue;
+                                }
+                                allCards.add(lkiLookup.get(c));
+                            }
                         }
                     }
                 }
             }
         } else if (destination != null) {
-            for (CardCollection c : column(destination).values()) {
-                allCards.addAll(c);
+            for (ZoneType zt : destination) {
+                for (CardCollection c : column(zt).values()) {
+                    allCards.addAll(c);
+                }
             }
         } else {
             for (CardCollection c : values()) {

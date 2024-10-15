@@ -26,11 +26,29 @@ public class ScryAi extends SpellAbilityAi {
      */
     @Override
     protected boolean doTriggerAINoCost(Player ai, SpellAbility sa, boolean mandatory) {
-        if (sa.usesTargeting()) { // It doesn't appear that Scry ever targets
+        if (sa.usesTargeting()) {
             // ability is targeted
             sa.resetTargets();
 
-            sa.getTargets().add(ai);
+            if (sa.canTarget(ai)) {
+                sa.getTargets().add(ai);
+            } else {
+                for (Player p : ai.getAllies()) {
+                    if (sa.canTarget(p)) {
+                        sa.getTargets().add(p);
+                        break;
+                    }
+                }
+                if (mandatory && !sa.isTargetNumberValid()) {
+                    for (Player p : ai.getOpponents()) {
+                        if (sa.canTarget(p)) {
+                            sa.getTargets().add(p);
+                            break;
+                        }
+                    }
+                }
+            }
+            return mandatory || sa.isTargetNumberValid();
         }
 
         return true;
@@ -46,8 +64,10 @@ public class ScryAi extends SpellAbilityAi {
      */
     @Override
     protected boolean checkPhaseRestrictions(final Player ai, final SpellAbility sa, final PhaseHandler ph) {
+        String logic = sa.getParamOrDefault("AILogic", "");
+
         // For Brain in a Jar, avoid competing against the other ability in the opponent's EOT.
-        if ("BrainJar".equals(sa.getParam("AILogic"))) {
+        if ("BrainJar".equals(logic)) {
             return ph.getPhase().isAfter(PhaseType.MAIN2);
         }
 
@@ -55,15 +75,15 @@ public class ScryAi extends SpellAbilityAi {
         // and right before the beginning of AI's turn, if possible, to avoid mana locking the AI and also to
         // try to scry right before drawing a card. Also, avoid tapping creatures in the AI's turn, if possible,
         // even if there's no mana cost.
-        if (sa.getPayCosts().hasTapCost()
+        if (logic.equals("AtOppEOT") || (sa.getPayCosts().hasTapCost()
                 && (sa.getPayCosts().hasManaCost() || (sa.getHostCard() != null && sa.getHostCard().isCreature()))
-                && !isSorcerySpeed(sa, ai)) {
+                && !isSorcerySpeed(sa, ai))) {
             return ph.getNextTurn() == ai && ph.is(PhaseType.END_OF_TURN);
         }
 
         // AI logic to scry in Main 1 if there is no better option, otherwise scry at opponent's EOT
         // (e.g. Glimmer of Genius)
-        if ("BestOpportunity".equals(sa.getParam("AILogic"))) {
+        if ("BestOpportunity".equals(logic)) {
             return doBestOpportunityLogic(ai, sa, ph);
         }
 
@@ -128,6 +148,21 @@ public class ScryAi extends SpellAbilityAi {
 
         if (playReusable(ai, sa)) {
             randomReturn = true;
+        }
+
+        if (sa.usesTargeting()) {
+            sa.resetTargets();
+            if (sa.canTarget(ai)) {
+                sa.getTargets().add(ai);
+            } else {
+                for (Player p : ai.getAllies()) {
+                    if (sa.canTarget(p)) {
+                        sa.getTargets().add(p);
+                        break;
+                    }
+                }
+            }
+            randomReturn = sa.isTargetNumberValid();
         }
 
         return randomReturn;

@@ -4,7 +4,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 
@@ -72,7 +71,7 @@ public class CopyPermanentAi extends SpellAbilityAi {
             }
         }
 
-        if (sa.hasParam("Embalm") || sa.hasParam("Eternalize")) {
+        if (sa.isEmbalm() || sa.isEternalize()) {
             // E.g. Vizier of Many Faces: check to make sure it makes sense to make the token now
             if (ComputerUtilCard.checkNeedsToPlayReqs(sa.getHostCard(), sa) != AiPlayDecision.WillPlay) {
                 return false;
@@ -125,12 +124,20 @@ public class CopyPermanentAi extends SpellAbilityAi {
         final Player activator = sa.getActivatingPlayer();
         final Game game = host.getGame();
         final String sourceName = ComputerUtilAbility.getAbilitySourceName(sa);
+        final String aiLogic = sa.getParamOrDefault("AILogic", "");
         final boolean canCopyLegendary = sa.hasParam("NonLegendary");
 
         if (sa.usesTargeting()) {
             sa.resetTargets();
 
             List<Card> list = CardUtil.getValidCardsToTarget(sa);
+
+            if (aiLogic.equals("Different")) {
+                // TODO: possibly improve the check, currently only checks if the name is the same
+                // Possibly also check if the card is threatened, and then allow to copy (this will, however, require a bit
+                // of a rewrite in canPlayAI to allow a response form of CopyPermanentAi)
+                list = CardLists.filter(list, Predicates.not(CardPredicates.nameEquals(host.getName())));
+            }
 
             //Nothing to target
             if (list.isEmpty()) {
@@ -168,12 +175,7 @@ public class CopyPermanentAi extends SpellAbilityAi {
                     }
                 }
 
-                list = CardLists.filter(list, new Predicate<Card>() {
-                    @Override
-                    public boolean apply(final Card c) {
-                        return (!c.getType().isLegendary() || canCopyLegendary) || !c.getController().equals(aiPlayer);
-                    }
-                });
+                list = CardLists.filter(list, c -> (!c.getType().isLegendary() || canCopyLegendary) || !c.getController().equals(aiPlayer));
                 Card choice;
                 if (Iterables.any(list, Presets.CREATURES)) {
                     if (sa.hasParam("TargetingPlayer")) {

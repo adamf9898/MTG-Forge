@@ -3,6 +3,7 @@ Code=PSDG
 Date=2001-06-28
 Name=Sega Dreamcast Cards
 Type=Promo
+ScryfallCode=PSDG
 
 [cards]
 1 R Arden Angel @Greg Staples
@@ -14,4 +15,4 @@ Type=Promo
 7 R Murgish Cemetery @Daren Bader
 8 R Saji's Torrent @Matt Cavotta
 9 R Tornellan Protector @Eric Peterson
-10 R Velican Dragon @Daren Bader
+10 R Velukan Dragon @Daren Bader

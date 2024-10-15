@@ -1,28 +1,24 @@
 package forge.ai;
 
-import java.util.List;
-
-import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 
 import forge.ai.ability.TokenAi;
 import forge.game.Game;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardLists;
-import forge.game.card.CardPredicates;
-import forge.game.card.CardUtil;
-import forge.game.card.CounterEnumType;
-import forge.game.card.CounterType;
+import forge.game.card.*;
 import forge.game.combat.Combat;
 import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
+import forge.game.zone.ZoneType;
 import forge.util.Aggregates;
+import forge.util.Expressions;
+
+import java.util.List;
 
 /*
  * This class contains logic which is shared by several cards with different ability types (e.g. AF ChangeZone / AF Destroy)
@@ -94,13 +90,10 @@ public class SpecialAiLogic {
                 bestOwnCardToUpgrade = Iterables.getFirst(CardLists.getKeyword(listOwn, Keyword.INDESTRUCTIBLE), null);
             }
             if (bestOwnCardToUpgrade == null) {
-                bestOwnCardToUpgrade = ComputerUtilCard.getWorstCreatureAI(CardLists.filter(listOwn, new Predicate<Card>() {
-                    @Override
-                    public boolean apply(Card card) {
-                        return card.isCreature() && (ComputerUtilCard.isUselessCreature(ai, card)
-                                || ComputerUtilCard.evaluateCreature(token) > 2 * ComputerUtilCard.evaluateCreature(card));
-                    }
-                }));
+                bestOwnCardToUpgrade = ComputerUtilCard.getWorstCreatureAI(CardLists.filter(listOwn, card -> card.isCreature()
+                        && (ComputerUtilCard.isUselessCreature(ai, card)
+                        || ComputerUtilCard.evaluateCreature(token) > 2 * ComputerUtilCard.evaluateCreature(card))
+                ));
             }
             if (bestOwnCardToUpgrade != null) {
                 if (ComputerUtilCard.isUselessCreature(ai, bestOwnCardToUpgrade) || (ph.getPhase().isAfter(PhaseType.COMBAT_END) || !ph.isPlayerTurn(ai))) {
@@ -148,14 +141,9 @@ public class SpecialAiLogic {
 
                 if (indestructible || (source.getNetToughness() <= dmg && source.getNetToughness() + toughnessBonus * numCreatsToSac > dmg)) {
                     final CardCollection sacFodder = CardLists.filter(ai.getCreaturesInPlay(),
-                            new Predicate<Card>() {
-                                @Override
-                                public boolean apply(Card card) {
-                                    return ComputerUtilCard.isUselessCreature(ai, card)
-                                            || card.hasSVar("SacMe")
-                                            || ComputerUtilCard.evaluateCreature(card) < selfEval; // Maybe around 150 is OK?
-                                }
-                            }
+                            card -> ComputerUtilCard.isUselessCreature(ai, card)
+                                    || card.hasSVar("SacMe")
+                                    || ComputerUtilCard.evaluateCreature(card) < selfEval // Maybe around 150 is OK?
                     );
                     return sacFodder.size() >= numCreatsToSac;
                 }
@@ -199,21 +187,16 @@ public class SpecialAiLogic {
                 // We have already attacked. Thus, see if we have a creature to sac that is worse to lose
                 // than the card we attacked with.
                 final CardCollection sacTgts = CardLists.filter(ai.getCreaturesInPlay(),
-                        new Predicate<Card>() {
-                            @Override
-                            public boolean apply(Card card) {
-                                return ComputerUtilCard.isUselessCreature(ai, card)
-                                        || ComputerUtilCard.evaluateCreature(card) < selfEval;
-                            }
-                        }
+                        card -> ComputerUtilCard.isUselessCreature(ai, card)
+                                || ComputerUtilCard.evaluateCreature(card) < selfEval
                 );
 
                 if (sacTgts.isEmpty()) {
                     return false;
                 }
 
-                final int minDefT = Aggregates.min(combat.getBlockers(source), CardPredicates.Accessors.fnGetNetToughness);
-                final int DefP = indestructible ? 0 : Aggregates.sum(combat.getBlockers(source), CardPredicates.Accessors.fnGetNetPower);
+                final int minDefT = Aggregates.min(combat.getBlockers(source), Card::getNetToughness);
+                final int DefP = indestructible ? 0 : Aggregates.sum(combat.getBlockers(source), Card::getNetPower);
 
                 // Make sure we don't over-sacrifice, only sac until we can survive and kill a creature
                 return source.getNetToughness() - source.getDamage() <= DefP || source.getNetCombatDamage() < minDefT;
@@ -221,14 +204,9 @@ public class SpecialAiLogic {
         } else {
             // We can't deal lethal, check if there's any sac fodder than can be used for other circumstances
             final CardCollection sacFodder = CardLists.filter(ai.getCreaturesInPlay(),
-                    new Predicate<Card>() {
-                        @Override
-                        public boolean apply(Card card) {
-                            return ComputerUtilCard.isUselessCreature(ai, card)
-                                    || card.hasSVar("SacMe")
-                                    || ComputerUtilCard.evaluateCreature(card) < selfEval; // Maybe around 150 is OK?
-                        }
-                    }
+                    card -> ComputerUtilCard.isUselessCreature(ai, card)
+                            || card.hasSVar("SacMe")
+                            || ComputerUtilCard.evaluateCreature(card) < selfEval // Maybe around 150 is OK?
             );
 
             return !sacFodder.isEmpty();
@@ -305,13 +283,8 @@ public class SpecialAiLogic {
 
                 // Check if there's anything that will die anyway that can be eaten to gain a perma-bonus
                 final CardCollection forcedSacTgts = CardLists.filter(relevantCreats,
-                        new Predicate<Card>() {
-                            @Override
-                            public boolean apply(Card card) {
-                                return ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card)
-                                        || (combat.isAttacking(card) && combat.isBlocked(card) && ComputerUtilCombat.combatantWouldBeDestroyed(ai, card, combat));
-                            }
-                        }
+                        card -> ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card)
+                                || (combat.isAttacking(card) && combat.isBlocked(card) && ComputerUtilCombat.combatantWouldBeDestroyed(ai, card, combat))
                 );
                 if (!forcedSacTgts.isEmpty()) {
                     return true;
@@ -330,14 +303,9 @@ public class SpecialAiLogic {
                 // than the card we attacked with. Since we're getting a permanent bonus, consider sacrificing
                 // things that are also threatened to be destroyed anyway.
                 final CardCollection sacTgts = CardLists.filter(relevantCreats,
-                        new Predicate<Card>() {
-                            @Override
-                            public boolean apply(Card card) {
-                                return ComputerUtilCard.isUselessCreature(ai, card)
-                                        || ComputerUtilCard.evaluateCreature(card) < selfEval
-                                        || ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card);
-                            }
-                        }
+                        card -> ComputerUtilCard.isUselessCreature(ai, card)
+                                || ComputerUtilCard.evaluateCreature(card) < selfEval
+                                || ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card)
                 );
 
                 if (sacTgts.isEmpty()) {
@@ -345,8 +313,8 @@ public class SpecialAiLogic {
                 }
 
                 final boolean sourceCantDie = ComputerUtilCombat.combatantCantBeDestroyed(ai, source);
-                final int minDefT = Aggregates.min(combat.getBlockers(source), CardPredicates.Accessors.fnGetNetToughness);
-                final int DefP = sourceCantDie ? 0 : Aggregates.sum(combat.getBlockers(source), CardPredicates.Accessors.fnGetNetPower);
+                final int minDefT = Aggregates.min(combat.getBlockers(source), Card::getNetToughness);
+                final int DefP = sourceCantDie ? 0 : Aggregates.sum(combat.getBlockers(source), Card::getNetPower);
 
                 // Make sure we don't over-sacrifice, only sac until we can survive and kill a creature
                 return source.getNetToughness() - source.getDamage() <= DefP || source.getNetCombatDamage() < minDefT;
@@ -355,18 +323,92 @@ public class SpecialAiLogic {
             // We can't deal lethal, check if there's any sac fodder than can be used for other circumstances
             final boolean isBlocking = combat != null && combat.isBlocking(source);
             final CardCollection sacFodder = CardLists.filter(relevantCreats,
-                    new Predicate<Card>() {
-                        @Override
-                        public boolean apply(Card card) {
-                            return ComputerUtilCard.isUselessCreature(ai, card)
-                                    || card.hasSVar("SacMe")
-                                    || (isBlocking && ComputerUtilCard.evaluateCreature(card) < selfEval)
-                                    || ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card);
-                        }
-                    }
+                    card -> ComputerUtilCard.isUselessCreature(ai, card)
+                            || card.hasSVar("SacMe")
+                            || (isBlocking && ComputerUtilCard.evaluateCreature(card) < selfEval)
+                            || ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card)
             );
 
             return !sacFodder.isEmpty();
         }
+    }
+
+    // AF Branch Counterspell with UnlessCost logic (Bring the Ending, Anticognition)
+    public static boolean doBranchCounterspellLogic(final Player ai, final SpellAbility sa) {
+        // TODO: this is an ugly hack that needs a rewrite if more cards are added with different SA setups or
+        // if this is to be made more generic in the future.
+        SpellAbility top = ComputerUtilAbility.getTopSpellAbilityOnStack(ai.getGame(), sa);
+        if (top == null || !sa.canTarget(top)) {
+            return false;
+        }
+        Card host = sa.getHostCard();
+
+        // pre-target the object to calculate the branch condition SVar, then clean up before running the real check
+        sa.getTargets().add(top);
+        int value = AbilityUtils.calculateAmount(sa.getHostCard(), sa.getParam("BranchConditionSVar"), sa);
+        sa.resetTargets();
+
+        String branchCompare = sa.getParamOrDefault("BranchConditionSVarCompare", "GE1");
+        String operator = branchCompare.substring(0, 2);
+        String operand = branchCompare.substring(2);
+        final int operandValue = AbilityUtils.calculateAmount(host, operand, sa);
+        boolean conditionMet = Expressions.compare(value, operator, operandValue);
+
+        SpellAbility falseSub = sa.getAdditionalAbility("FalseSubAbility"); // this ability has the UnlessCost part
+        boolean willPlay = false;
+        if (!conditionMet && falseSub.hasParam("UnlessCost")) {
+            // FIXME: We're emulating the UnlessCost on the SA to run the proper checks.
+            // This is hacky, but it works. Perhaps a cleaner way exists?
+            sa.getMapParams().put("UnlessCost", falseSub.getParam("UnlessCost"));
+            willPlay = SpellApiToAi.Converter.get(ApiType.Counter).canPlayAIWithSubs(ai, sa);
+            sa.getMapParams().remove("UnlessCost");
+        } else {
+            willPlay = SpellApiToAi.Converter.get(ApiType.Counter).canPlayAIWithSubs(ai, sa);
+        }
+        return willPlay;
+    }
+
+    public static boolean preferHasteForRiot(SpellAbility sa, Player player) {
+        // returning true means preferring Haste, returning false means preferring a +1/+1 counter
+        final Card host = sa.getHostCard();
+        final Game game = host.getGame();
+        final Card copy = CardCopyService.getLKICopy(host);
+        copy.setLastKnownZone(player.getZone(ZoneType.Battlefield));
+
+        // check state it would have on the battlefield
+        CardCollection preList = new CardCollection(copy);
+        game.getAction().checkStaticAbilities(false, Sets.newHashSet(copy), preList);
+        // reset again?
+        game.getAction().checkStaticAbilities(false);
+
+        // can't gain counters, use Haste
+        if (!copy.canReceiveCounters(CounterEnumType.P1P1)) {
+            return true;
+        }
+
+        // already has Haste, use counter
+        if (copy.hasKeyword(Keyword.HASTE)) {
+            return false;
+        }
+
+        // not AI turn
+        if (!game.getPhaseHandler().isPlayerTurn(player)) {
+            return false;
+        }
+
+        // not before Combat
+        if (!game.getPhaseHandler().getPhase().isBefore(PhaseType.COMBAT_DECLARE_ATTACKERS)) {
+            return false;
+        }
+
+        // TODO check other opponents too if able
+        final Player opp = player.getWeakestOpponent();
+        if (opp != null) {
+            // TODO add predict Combat Damage?
+            return opp.getLife() < copy.getNetPower();
+        }
+
+        // haste might not be good enough?
+        return false;
     }
 }

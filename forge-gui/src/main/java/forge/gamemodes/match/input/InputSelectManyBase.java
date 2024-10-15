@@ -23,6 +23,8 @@ public abstract class InputSelectManyBase<T extends GameEntity> extends InputSyn
     protected boolean allowCancel = false;
     protected SpellAbility sa = null;
     protected CardView card;
+    protected String tallyType;
+    protected int tally;
 
     protected String message = "Source-Card-Name - Select %d more card(s)";
 
@@ -41,6 +43,16 @@ public abstract class InputSelectManyBase<T extends GameEntity> extends InputSyn
         if (sa0 != null) {
             this.card = sa0.getView().getHostCard();
         }
+    }
+
+    protected InputSelectManyBase(final PlayerControllerHuman controller, final int min, final int max, final SpellAbility sa0, final String tallyType0, final int tally0) {
+        this(controller,min,max);
+        this.sa = sa0;
+        if (sa0 != null) {
+            this.card = sa0.getView().getHostCard();
+        }
+        this.tallyType = tallyType0;
+        this.tally = tally0;
     }
 
     protected InputSelectManyBase(final PlayerControllerHuman controller, final int min, final int max, final CardView card0) {
@@ -65,13 +77,19 @@ public abstract class InputSelectManyBase<T extends GameEntity> extends InputSyn
     @Override
     public final void showMessage() {
         if (FModel.getPreferences().getPrefBoolean(ForgePreferences.FPref.UI_DETAILED_SPELLDESC_IN_PROMPT) &&
-             card != null) {
+                card != null) {
             final StringBuilder sb = new StringBuilder();
             sb.append(card.toString());
-            if ( (sa != null) && (!sa.toString().isEmpty()) ) { // some spell abilities have no useful string value
-                sb.append(" - ").append(sa.toString());
+            if (sa != null) {
+                if (sa.isSpell() && sa.getHostCard().isPermanent() && !sa.hasParam("SpellDescription") && !sa.getPayCosts().isOnlyManaCost()) {
+                    sb.append(" - ").append(sa.getPayCosts().toString());
+                } else if (!sa.toString().isEmpty()) { // some spell abilities have no useful string value
+                    sb.append("\n - ").append(sa.toString());
+                } else {
+                    sb.append("\n");
+                }
             }
-            sb.append("\n\n").append(getMessage());
+            sb.append("\n").append(getMessage());
             showMessage(sb.toString(), card);
         } else {
             if (card != null) { 

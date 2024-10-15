@@ -57,7 +57,9 @@ public class VoteEffect extends SpellAbilityEffect {
         final Card host = sa.getHostCard();
         final Game game = host.getGame();
         final Player activator = sa.getActivatingPlayer();
-        final boolean secret = sa.hasParam("Secret");
+
+        final boolean secret = sa.hasParam("Secretly");
+        final boolean other = sa.hasParam("VotePlayer") && sa.getParam("VotePlayer").equals("Other");
         final StringBuilder record = new StringBuilder();
 
         if (sa.hasParam("VoteType")) {
@@ -66,7 +68,8 @@ public class VoteEffect extends SpellAbilityEffect {
             ZoneType zone = sa.hasParam("Zone") ? ZoneType.smartValueOf(sa.getParam("Zone")) : ZoneType.Battlefield;
             voteType.addAll(CardLists.getValidCards(game.getCardsIn(zone), sa.getParam("VoteCard"), activator, host, sa));
         } else if (sa.hasParam("VotePlayer")) {
-            voteType.addAll(AbilityUtils.getDefinedPlayers(host, sa.getParam("VotePlayer"), sa));
+            String param = other ? "Player" : sa.getParam("VotePlayer");
+            voteType.addAll(AbilityUtils.getDefinedPlayers(host, param, sa));
         }
         if (voteType.isEmpty()) {
             return;
@@ -79,30 +82,37 @@ public class VoteEffect extends SpellAbilityEffect {
         }
 
         ListMultimap<Object, Player> votes = ArrayListMultimap.create();
-
         Player voter = game.getControlVote();
 
         for (final Player p : tgtPlayers) {
+            final List<Object> voteOpts = Lists.newArrayList(voteType);
             int voteAmount = p.getAdditionalVotesAmount() + 1;
             int optionalVotes = p.getAdditionalOptionalVotesAmount();
             Player realVoter = voter == null ? p : voter;
+
+            if (other) {
+                voteOpts.remove(realVoter);
+                if (voteOpts.isEmpty()) continue;
+            }
 
             Map<String, Object> params = Maps.newHashMap();
             params.put("Voter", realVoter);
             voteAmount += p.getController().chooseNumber(sa, Localizer.getInstance().getMessage("lblHowManyAdditionalVotesDoYouWant"), 0, optionalVotes, params);
 
             for (int i = 0; i < voteAmount; i++) {
-                Object result = realVoter.getController().vote(sa, host + " " + Localizer.getInstance().getMessage("lblVote") + ":", voteType, votes, p);
+                Object result = realVoter.getController().vote(sa, host + " " + Localizer.getInstance().getMessage("lblVote") + ":", voteOpts, votes, p, sa.hasParam("UpTo"));
 
-                votes.put(result, p);
-                if (!secret) {
-                    game.getAction().notifyOfValue(sa, p, result + "\r\n" +
-                            Localizer.getInstance().getMessage("lblCurrentVote") + ":" + votes, p);
-                }
-                if (record.length() > 0) {
+                if (result != null) {
+                    votes.put(result, p);
+                    if (!secret) {
+                        game.getAction().notifyOfValue(sa, p, result + "\r\n" +
+                                Localizer.getInstance().getMessage("lblCurrentVote") + ":" + votes, p);
+                    }
+                    if (record.length() > 0) {
                         record.append("\r\n");
+                    }
+                    record.append(p).append(" ").append(Localizer.getInstance().getMessage("lblVotedFor", result));
                 }
-                record.append(p).append(" ").append(Localizer.getInstance().getMessage("lblVotedFor", result));
             }
         }
 
@@ -111,7 +121,6 @@ public class VoteEffect extends SpellAbilityEffect {
             game.getAction().notifyOfValue(sa, host, voteResult, null);
         }
         game.fireEvent(new GameEventRandomLog(voteResult));
-
 
         final Map<AbilityKey, Object> runParams = AbilityKey.newMap();
         runParams.put(AbilityKey.AllVotes, votes);

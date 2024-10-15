@@ -3,17 +3,12 @@ package forge.ai.ability;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.base.Predicate;
-
 import forge.ai.ComputerUtilCard;
 import forge.ai.SpecialCardAi;
 import forge.ai.SpellAbilityAi;
 import forge.game.ability.AbilityUtils;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardLists;
+import forge.game.card.*;
 import forge.game.card.CardPredicates.Presets;
-import forge.game.card.CardUtil;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
@@ -50,20 +45,6 @@ public class RepeatEachAi extends SpellAbilityAi {
                     return false;
                 }
             }
-        } else if ("OpponentHasCreatures".equals(logic)) { //TODO convert this to NeedsToPlayVar
-            for (Player opp : aiPlayer.getOpponents()) {
-                if (!opp.getCreaturesInPlay().isEmpty()) {
-                    return true;
-                }
-            }
-            return false;
-        } else if ("OpponentHasMultipleCreatures".equals(logic)) {
-            for (Player opp : aiPlayer.getOpponents()) {
-                if (opp.getCreaturesInPlay().size() > 1) {
-                    return true;
-                }
-            }
-            return false;
         } else if ("AllPlayerLoseLife".equals(logic)) {
             final Card source = sa.getHostCard();
             SpellAbility repeat = sa.getAdditionalAbility("RepeatSubAbility");
@@ -84,7 +65,7 @@ public class RepeatEachAi extends SpellAbilityAi {
 
             boolean hitOpp = false;
             // need a copy for source so YouCtrl can be faked
-            final Card sourceLKI = CardUtil.getLKICopy(source);
+            final Card sourceLKI = CardCopyService.getLKICopy(source);
 
             // check if any opponent is affected
             for (final Player opp : aiPlayer.getOpponents()) {
@@ -100,12 +81,7 @@ public class RepeatEachAi extends SpellAbilityAi {
             return hitOpp;
         } else if ("EquipAll".equals(logic)) {
             if (aiPlayer.getGame().getPhaseHandler().is(PhaseType.MAIN1, aiPlayer)) {
-                final CardCollection unequipped = CardLists.filter(aiPlayer.getCardsIn(ZoneType.Battlefield), new Predicate<Card>() {
-                    @Override
-                    public boolean apply(Card card) {
-                        return card.isEquipment() && card.getAttachedTo() != sa.getHostCard();
-                    }
-                });
+                final CardCollection unequipped = CardLists.filter(aiPlayer.getCardsIn(ZoneType.Battlefield), card -> card.isEquipment() && card.getAttachedTo() != sa.getHostCard());
 
                 return !unequipped.isEmpty();
             }

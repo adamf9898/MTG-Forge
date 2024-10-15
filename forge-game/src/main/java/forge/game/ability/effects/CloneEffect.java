@@ -1,21 +1,13 @@
 package forge.game.ability.effects;
 
-import java.util.Arrays;
-import java.util.List;
-
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-
 import forge.GameCommand;
 import forge.StaticData;
 import forge.game.Game;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.SpellAbilityEffect;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardFactory;
-import forge.game.card.CardLists;
-import forge.game.card.CardPredicates;
+import forge.game.card.*;
 import forge.game.event.GameEventCardStatsChanged;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
@@ -23,6 +15,10 @@ import forge.game.zone.ZoneType;
 import forge.util.CardTranslation;
 import forge.util.Localizer;
 import forge.util.collect.FCollection;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class CloneEffect extends SpellAbilityEffect {
     // TODO update this method
@@ -56,9 +52,13 @@ public class CloneEffect extends SpellAbilityEffect {
 
     @Override
     public void resolve(SpellAbility sa) {
+        if (!checkValidDuration(sa.getParam("Duration"), sa)) {
+            return;
+        }
+
         final Card host = sa.getHostCard();
         final Player activator = sa.getActivatingPlayer();
-        Card tgtCard = host;
+        List<Card> cloneTargets = new ArrayList<>();
         final Game game = activator.getGame();
         final List<String> pumpKeywords = Lists.newArrayList();
 
@@ -89,9 +89,11 @@ public class CloneEffect extends SpellAbilityEffect {
             }
 
             choices = CardLists.getValidCards(choices, sa.getParam("Choices"), activator, host, sa);
+            boolean choiceOpt = sa.hasParam("ChoiceOptional");
 
-            String title = sa.hasParam("ChoiceTitle") ? sa.getParam("ChoiceTitle") : Localizer.getInstance().getMessage("lblChooseaCard") + " ";
-            cardToCopy = activator.getController().chooseSingleEntityForEffect(choices, sa, title, false, null);
+            String title = sa.hasParam("ChoiceTitle") ? sa.getParam("ChoiceTitle") :
+                    Localizer.getInstance().getMessage("lblChooseaCard") + " ";
+            cardToCopy = activator.getController().chooseSingleEntityForEffect(choices, sa, title, choiceOpt, null);
         } else if (sa.hasParam("Defined")) {
             List<Card> cloneSources = AbilityUtils.getDefinedCards(host, sa.getParam("Defined"), sa);
             if (!cloneSources.isEmpty()) {
@@ -114,85 +116,91 @@ public class CloneEffect extends SpellAbilityEffect {
 
         // find target of cloning i.e. card becoming a clone
         if (sa.hasParam("CloneTarget")) {
-            final List<Card> cloneTargets = AbilityUtils.getDefinedCards(host, sa.getParam("CloneTarget"), sa);
-            if (!cloneTargets.isEmpty()) {
-                tgtCard = cloneTargets.get(0);
-                game.getTriggerHandler().clearActiveTriggers(tgtCard, null);
-            } else {
+            cloneTargets = AbilityUtils.getDefinedCards(host, sa.getParam("CloneTarget"), sa);
+            if (cloneTargets.isEmpty()) {
                 return;
             }
         } else if (sa.hasParam("Choices") && sa.usesTargeting()) {
-            tgtCard = sa.getTargetCard();
-            game.getTriggerHandler().clearActiveTriggers(tgtCard, null);
+            cloneTargets.add(sa.getTargetCard());
+        } else {
+            cloneTargets.add(host);
         }
 
-        if (sa.hasParam("CloneZone")) {
-            if (!tgtCard.isInZone(ZoneType.smartValueOf(sa.getParam("CloneZone")))) {
-                return;
+        if (cloneTargets.contains(cardToCopy) && sa.hasParam("ExcludeChosen")) {
+            cloneTargets.remove(cardToCopy);
+        }
+
+        for (Card tgtCard : cloneTargets) {
+            if (sa.hasParam("CloneZone") &&
+                    !tgtCard.isInZone(ZoneType.smartValueOf(sa.getParam("CloneZone")))) {
+                continue;
             }
-        }
 
-        if (tgtCard.isPhasedOut()) {
-            return;
-        }
+            if (tgtCard.isPhasedOut()) {
+                continue;
+            }
 
-        final Long ts = game.getNextTimestamp();
-        tgtCard.addCloneState(CardFactory.getCloneStates(cardToCopy, tgtCard, sa), ts);
+            game.getTriggerHandler().clearActiveTriggers(tgtCard, null);
 
-        // set ETB tapped of clone
-        if (sa.hasParam("IntoPlayTapped")) {
-            tgtCard.setTapped(true);
-        }
+            final long ts = game.getNextTimestamp();
+            tgtCard.addCloneState(CardFactory.getCloneStates(cardToCopy, tgtCard, sa), ts);
+            tgtCard.updateRooms();
 
-        if (!pumpKeywords.isEmpty()) {
-            tgtCard.addChangedCardKeywords(pumpKeywords, Lists.newArrayList(), false, ts, 0);
-        }
+            // set ETB tapped of clone
+            if (sa.hasParam("IntoPlayTapped")) {
+                tgtCard.setTapped(true);
+            }
 
-        tgtCard.updateStateForView();
+            if (!pumpKeywords.isEmpty()) {
+                tgtCard.addChangedCardKeywords(pumpKeywords, Lists.newArrayList(), false, ts, null);
+                TokenEffectBase.addPumpUntil(sa, tgtCard, ts);
+            }
 
-        // when clone is itself, cleanup from old abilities
-        if (host.equals(tgtCard) && !sa.hasParam("ImprintRememberedNoCleanup")) {
-            tgtCard.clearImprintedCards();
-            tgtCard.clearRemembered();
-        }
+            tgtCard.updateStateForView();
 
-        if (sa.hasParam("Duration")) {
-            final Card cloneCard = tgtCard;
-            // if clone is temporary, target needs old values back after (keep Death-Mask Duplicant working)
-            final Iterable<Card> clonedImprinted = new CardCollection(tgtCard.getImprintedCards());
-            final Iterable<Object> clonedRemembered = new FCollection<>(tgtCard.getRemembered());
+            // when clone is itself, cleanup from old abilities
+            if (host.equals(tgtCard) && !sa.hasParam("ImprintRememberedNoCleanup")) {
+                tgtCard.clearImprintedCards();
+                tgtCard.clearRemembered();
+            }
 
-            final GameCommand unclone = new GameCommand() {
-                private static final long serialVersionUID = -78375985476256279L;
+            if (sa.hasParam("Duration")) {
+                final Card cloneCard = tgtCard;
+                // if clone is temporary, target needs old values back after (keep Death-Mask Duplicant working)
+                final Iterable<Card> clonedImprinted = new CardCollection(tgtCard.getImprintedCards());
+                final Iterable<Object> clonedRemembered = new FCollection<>(tgtCard.getRemembered());
 
-                @Override
-                public void run() {
-                    if (cloneCard.removeCloneState(ts)) {
-                        // remove values gained while being cloned
-                        cloneCard.clearImprintedCards();
-                        cloneCard.clearRemembered();
-                        // restore original Remembered and Imprinted, ignore cards from players who lost
-                        cloneCard.addImprintedCards(Iterables.filter(clonedImprinted, CardPredicates.ownerLives()));
-                        cloneCard.addRemembered(Iterables.filter(clonedRemembered, Player.class));
-                        cloneCard.addRemembered(Iterables.filter(Iterables.filter(clonedRemembered, Card.class), CardPredicates.ownerLives()));
-                        cloneCard.updateStateForView();
-                        game.fireEvent(new GameEventCardStatsChanged(cloneCard));
+                final GameCommand unclone = new GameCommand() {
+                    private static final long serialVersionUID = -78375985476256279L;
+
+                    @Override
+                    public void run() {
+                        if (cloneCard.removeCloneState(ts)) {
+                            // remove values gained while being cloned
+                            cloneCard.clearImprintedCards();
+                            cloneCard.clearRemembered();
+                            // restore original Remembered and Imprinted, ignore cards from players who lost
+                            cloneCard.addImprintedCards(Iterables.filter(clonedImprinted, CardPredicates.ownerLives()));
+                            cloneCard.addRemembered(Iterables.filter(clonedRemembered, Player.class));
+                            cloneCard.addRemembered(Iterables.filter(Iterables.filter(clonedRemembered, Card.class), CardPredicates.ownerLives()));
+                            cloneCard.updateStateForView();
+                            game.fireEvent(new GameEventCardStatsChanged(cloneCard));
+                        }
                     }
-                }
-            };
+                };
 
-            addUntilCommand(sa, unclone);
+                addUntilCommand(sa, unclone);
+            }
+
+            // now we can also cleanup in case target was another card
+            tgtCard.clearRemembered();
+            tgtCard.clearImprintedCards();
+
+            if (sa.hasParam("RememberCloneOrigin")) {
+                tgtCard.addRemembered(cardToCopy);
+            }
+
+            game.fireEvent(new GameEventCardStatsChanged(tgtCard));
         }
-
-        // now we can also cleanup in case target was another card
-        tgtCard.clearRemembered();
-        tgtCard.clearImprintedCards();
-
-        if (sa.hasParam("RememberCloneOrigin")) {
-            tgtCard.addRemembered(cardToCopy);
-        }
-
-        game.fireEvent(new GameEventCardStatsChanged(tgtCard));
     }
-
 }

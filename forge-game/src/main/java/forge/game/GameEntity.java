@@ -47,7 +47,7 @@ import forge.game.staticability.StaticAbilityCantAttach;
 import forge.game.zone.ZoneType;
 
 public abstract class GameEntity extends GameObject implements IIdentifiable {
-    protected final int id;
+    protected int id;
     private String name = "";
     protected CardCollection attachedCards = new CardCollection();
     protected Map<CounterType, Integer> counters = Maps.newHashMap();
@@ -61,6 +61,7 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
     public int getId() {
         return id;
     }
+    public void dangerouslySetId(int i) { id = i; }
 
     public String getName() {
         return name;
@@ -161,6 +162,14 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
         updateAttachedCards();
     }
 
+    public final void clearAttachedCards() {
+        if (attachedCards.isEmpty()) {
+            return;
+        }
+        attachedCards.clear();
+        updateAttachedCards();
+    }
+
     public final boolean hasCardAttachments() {
         return !getAttachedCards().isEmpty();
     }
@@ -186,10 +195,6 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
         return hasCardAttachment(cardName);
     }
 
-    /**
-     * internal method
-     * @param Card c
-     */
     public final void addAttachedCard(final Card c) {
         if (attachedCards.add(c)) {
             updateAttachedCards();
@@ -197,10 +202,6 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
         }
     }
 
-    /**
-     * internal method
-     * @param Card c
-     */
     public final void removeAttachedCard(final Card c) {
         if (attachedCards.remove(c)) {
             updateAttachedCards();
@@ -278,7 +279,6 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
         return tgt != null && isValid(tgt.getValidTgts(), aura.getController(), aura, sa);
     }
 
-    // Counters!
     public boolean hasCounters() {
         return !counters.isEmpty();
     }
@@ -309,8 +309,10 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
 
     abstract public void setCounters(final Map<CounterType, Integer> allCounters);
 
+    abstract public boolean canRemoveCounters(final CounterType type);
+
     abstract public boolean canReceiveCounters(final CounterType type);
-    abstract public void subtractCounter(final CounterType counterName, final int n);
+    abstract public int subtractCounter(final CounterType counterName, final int n, final Player remover);
     abstract public void clearCounters();
 
     public boolean canReceiveCounters(final CounterEnumType type) {
@@ -331,8 +333,8 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
         addCounter(CounterType.get(counterType), n, source, table);
     }
 
-    public void subtractCounter(final CounterEnumType counterName, final int n) {
-        subtractCounter(CounterType.get(counterName), n);
+    public int subtractCounter(final CounterEnumType counterName, final int n, final Player remover) {
+        return subtractCounter(CounterType.get(counterName), n, remover);
     }
 
     abstract public void addCounterInternal(final CounterType counterType, final int n, final Player source, final boolean fireEvents, GameEntityCounterTable table, Map<AbilityKey, Object> params);
@@ -363,7 +365,7 @@ public abstract class GameEntity extends GameObject implements IIdentifiable {
             if (isCombat != null && dmg.getRight() != isCombat) {
                 continue;
             }
-            if (source != null && !getGame().getDamageLKI(dmg).getLeft().equalsWithTimestamp(source)) {
+            if (source != null && !getGame().getDamageLKI(dmg).getLeft().equalsWithGameTimestamp(source)) {
                 continue;
             }
             num += dmg.getLeft();

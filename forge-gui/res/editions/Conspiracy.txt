@@ -47,7 +47,7 @@ ScryfallCode=CNS
 36 U Treasonous Ogre @Randy Gallegos
 37 U Predator's Howl @Ralph Horsley
 38 R Realm Seekers @Mike Sass
-39 U Selvala's Charge @Dan Scott
+39 U Selvala's Charge @Dan Murayama Scott
 40 C Selvala's Enforcer @Jesper Ejsing
 41 R Brago, King Eternal @Karla Ortiz
 42 M Dack Fayden @Eric Deschamps
@@ -58,7 +58,7 @@ ScryfallCode=CNS
 47 R Grenzo, Dungeon Warden @Lucas Graciano
 48 R Magister of Worth @John Stanko
 49 M Marchesa, the Black Rose @Matt Stewart
-50 U Marchesa's Smuggler @Dan Scott
+50 U Marchesa's Smuggler @Dan Murayama Scott
 51 R Selvala, Explorer Returned @Tyler Jacobson
 52 U Woodvine Elemental @Mike Bierek
 53 R Aether Searcher @James Paick
@@ -66,7 +66,7 @@ ScryfallCode=CNS
 55 R Canal Dredger @John Avon
 56 M Coercive Portal @Yeong-Hao Han
 57 R Cogwork Grinder @Jasper Sandner
-58 C Cogwork Librarian @Dan Scott
+58 C Cogwork Librarian @Dan Murayama Scott
 59 C Cogwork Spy @Tomasz Jedruszek
 60 U Cogwork Tracker @Alex Horley-Orlandelli
 61 R Deal Broker @Cliff Childs
@@ -219,6 +219,33 @@ ScryfallCode=CNS
 208 U Mirrodin's Core @Greg Staples
 209 U Quicksand @Matt Stewart
 210 R Reflecting Pool @Fred Fields
+
+[Draft Matters]
+1 Advantageous Proclamation|CNS
+1 Aether Searcher|CNS
+1 Agent of Acquisitions|CNS
+1 Backup Plan|CNS
+1 Brago's Favor|CNS
+1 Canal Dredger|CNS
+1 Cogwork Grinder|CNS
+1 Cogwork Librarian|CNS
+1 Cogwork Spy|CNS
+1 Cogwork Tracker|CNS
+1 Deal Broker|CNS
+1 Double Stroke|CNS
+1 Immediate Action|CNS
+1 Iterative Analysis|CNS
+1 Lore Seeker|CNS
+1 Lurking Automaton|CNS
+1 Muzzio's Preparations|CNS
+1 Paliano, the High City|CNS
+1 Power Play|CNS
+1 Secret Summoning|CNS
+1 Secrets of Paradise|CNS
+1 Sentinel Dispatch|CNS
+1 Unexpected Potential|CNS
+1 Whispergear Sneak|CNS
+1 Worldknit|CNS
 
 [tokens]
 w_1_1_spirit_flying

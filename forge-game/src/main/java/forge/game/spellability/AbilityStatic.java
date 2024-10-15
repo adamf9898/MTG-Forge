@@ -52,6 +52,12 @@ public abstract class AbilityStatic extends Ability implements Cloneable {
     public boolean canPlay() {
         final Card c = this.getHostCard();
 
+        // Check if ability can't be attempted because of replacement effect
+        // Initial usage is Karlov Watchdog preventing disguise/morph/cloak/manifest turning face up
+        if (this.isTurnFaceUp() && !c.canBeTurnedFaceUp()) {
+            return false;
+        }
+
         return this.getRestrictions().canPlay(c, this);
     }
 

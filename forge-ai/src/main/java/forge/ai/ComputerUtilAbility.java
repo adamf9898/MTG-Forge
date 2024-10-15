@@ -1,11 +1,9 @@
 package forge.ai;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
 
 import forge.card.CardStateName;
@@ -16,7 +14,6 @@ import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
 import forge.game.card.CardLists;
-import forge.game.card.CardPredicates.Presets;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostPayEnergy;
 import forge.game.cost.CostPutCounter;
@@ -34,23 +31,14 @@ public class ComputerUtilAbility {
         if (!game.getStack().isEmpty() || !game.getPhaseHandler().getPhase().isMain()) {
             return null;
         }
-        final CardCollection hand = new CardCollection(player.getCardsIn(ZoneType.Hand));
-        hand.addAll(player.getCardsIn(ZoneType.Exile));
-        CardCollection landList = CardLists.filter(hand, Presets.LANDS);
+        CardCollection landList = new CardCollection(player.getCardsIn(ZoneType.Hand));
 
         //filter out cards that can't be played
-        landList = CardLists.filter(landList, new Predicate<Card>() {
-            @Override
-            public boolean apply(final Card c) {
-                if (!c.getSVar("NeedsToPlay").isEmpty()) {
-                    final String needsToPlay = c.getSVar("NeedsToPlay");
-                    CardCollection list = CardLists.getValidCards(game.getCardsIn(ZoneType.Battlefield), needsToPlay, c.getController(), c, null);
-                    if (list.isEmpty()) {
-                        return false;
-                    }
-                }
-                return player.canPlayLand(c);
+        landList = CardLists.filter(landList, c -> {
+            if (!c.hasPlayableLandFace()) {
+                return false;
             }
+            return player.canPlayLand(c, false, c.getFirstSpellAbility());
         });
 
         final CardCollection landsNotInHand = new CardCollection(player.getCardsIn(ZoneType.Graveyard));
@@ -59,7 +47,7 @@ public class ComputerUtilAbility {
             landsNotInHand.add(player.getCardsIn(ZoneType.Library).get(0));
         }
         for (final Card crd : landsNotInHand) {
-            if (!(crd.isLand() || (crd.isFaceDown() && crd.getState(CardStateName.Original).getType().isLand()))) {
+            if (!(crd.hasPlayableLandFace() || (crd.isFaceDown() && crd.getState(CardStateName.Original).getType().isLand()))) {
                 continue;
             }
             if (!crd.mayPlay(player).isEmpty()) {
@@ -107,7 +95,7 @@ public class ComputerUtilAbility {
 
         for (SpellAbility sa : originListWithAddCosts) {
             // determine which alternative costs are cheaper than the original and prioritize them
-            List<SpellAbility> saAltCosts = GameActionUtil.getAlternativeCosts(sa, player);
+            List<SpellAbility> saAltCosts = GameActionUtil.getAlternativeCosts(sa, player, false);
             List<SpellAbility> priorityAltSa = Lists.newArrayList();
             List<SpellAbility> otherAltSa = Lists.newArrayList();
             for (SpellAbility altSa : saAltCosts) {
@@ -256,10 +244,27 @@ public class ComputerUtilAbility {
             }
 
             // deprioritize planar die roll marked with AIRollPlanarDieParams:LowPriority$ True
-            if (ApiType.RollPlanarDice == a.getApi() && a.getHostCard() != null && a.getHostCard().hasSVar("AIRollPlanarDieParams") && a.getHostCard().getSVar("AIRollPlanarDieParams").toLowerCase().matches(".*lowpriority\\$\\s*true.*")) {
-                return 1;
-            } else if (ApiType.RollPlanarDice == b.getApi() && b.getHostCard() != null && b.getHostCard().hasSVar("AIRollPlanarDieParams") && b.getHostCard().getSVar("AIRollPlanarDieParams").toLowerCase().matches(".*lowpriority\\$\\s*true.*")) {
-                return -1;
+            if (ApiType.RollPlanarDice == a.getApi() || ApiType.RollPlanarDice == b.getApi()) {
+                Card hostCardForGame = a.getHostCard();
+                if (hostCardForGame == null) {
+                    if (b.getHostCard() != null) {
+                        hostCardForGame = b.getHostCard();
+                    } else {
+                        return 0; // fallback if neither SA have a host card somehow
+                    }
+                }
+                Game game = hostCardForGame.getGame();
+                if (game.getActivePlanes() != null) {
+                    for (Card c : game.getActivePlanes()) {
+                        if (c.hasSVar("AIRollPlanarDieParams") && c.getSVar("AIRollPlanarDieParams").toLowerCase().matches(".*lowpriority\\$\\s*true.*")) {
+                            if (ApiType.RollPlanarDice == a.getApi()) {
+                                return 1;
+                            } else {
+                                return -1;
+                            }
+                        }
+                    }
+                }
             }
 
             // deprioritize pump spells with pure energy cost (can be activated last,
@@ -348,7 +353,7 @@ public class ComputerUtilAbility {
                 }
                 // 1. increase chance of using Surge effects
                 // 2. non-surged versions are usually inefficient
-                if (source.getOracleText().contains("surge cost") && !sa.isSurged()) {
+                if (source.hasKeyword(Keyword.SURGE) && !sa.isSurged()) {
                     p -= 9;
                 }
                 // move snap-casted spells to front
@@ -381,8 +386,10 @@ public class ComputerUtilAbility {
             }
 
             if (ApiType.DestroyAll == sa.getApi()) {
+                // check boardwipe earlier
                 p += 4;
             } else if (ApiType.Mana == sa.getApi()) {
+                // keep mana abilities for paying
                 p -= 9;
             }
 
@@ -393,7 +400,7 @@ public class ComputerUtilAbility {
 
             return p;
         }
-    };
+    }
 
     public static List<SpellAbility> sortCreatureSpells(final List<SpellAbility> all) {
         // try to smoothen power creep by making CMC less of a factor
@@ -402,7 +409,7 @@ public class ComputerUtilAbility {
             return all;
         }
         // TODO this doesn't account for nearly identical creatures where one is a newer but more cost efficient variant
-        Collections.sort(creatures, ComputerUtilCard.EvaluateCreatureSpellComparator);
+        creatures.sort(ComputerUtilCard.EvaluateCreatureSpellComparator);
         int idx = 0;
         for (int i = 0; i < all.size(); i++) {
             if (all.get(i).getApi() == ApiType.PermanentCreature) {

@@ -13,6 +13,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.utils.Array;
+import com.google.common.base.Predicates;
 import forge.Forge;
 import forge.adventure.data.DialogData;
 import forge.adventure.data.EffectData;
@@ -26,6 +27,8 @@ import forge.adventure.util.pathfinding.MovementBehavior;
 import forge.adventure.util.pathfinding.NavigationVertex;
 import forge.adventure.util.pathfinding.ProgressableGraphPath;
 import forge.card.CardRarity;
+import forge.card.CardRulesPredicates;
+import forge.deck.CardPool;
 import forge.deck.Deck;
 import forge.item.PaperCard;
 import forge.util.Aggregates;
@@ -321,7 +324,8 @@ public class EnemySprite extends CharacterSprite implements Steerable<Vector2> {
         if (_freeze){
             //Mob has defeated player in battle, hold still until player has a chance to move away.
             //Without this moving enemies can immediately restart battle.
-            if (spriteToPlayer.len() < unfreezeRange) {
+            float distance = spriteToPlayer.len();
+            if (distance < unfreezeRange) {
                 timer += delta;
                 return Vector2.Zero;
             }
@@ -476,11 +480,11 @@ public class EnemySprite extends CharacterSprite implements Steerable<Vector2> {
         } else {
             if(data.rewards != null) { //Collect standard rewards.
                 Deck enemyDeck = Current.latestDeck();
-                /*// By popular demand, remove basic lands from the reward pool.
-                CardPool deckNoBasicLands = enemyDeck.getMain().getFilteredPool(Predicates.compose(Predicates.not(CardRulesPredicates.Presets.IS_BASIC_LAND), PaperCard.FN_GET_RULES));*/
+                // By popular demand, remove basic lands from the reward pool.
+                CardPool deckNoBasicLands = enemyDeck.getMain().getFilteredPool(Predicates.compose(Predicates.not(CardRulesPredicates.Presets.IS_BASIC_LAND), PaperCard::getRules));
 
                 for (RewardData rdata : data.rewards) {
-                    ret.addAll(rdata.generate(false,  enemyDeck == null ? null : enemyDeck.getMain().toFlatList(),true ));
+                    ret.addAll(rdata.generate(false,  enemyDeck == null ? null : deckNoBasicLands.toFlatList(),true ));
                 }
             }
             if(rewards != null) { //Collect additional rewards.
@@ -564,7 +568,7 @@ public class EnemySprite extends CharacterSprite implements Steerable<Vector2> {
 
     public float getLifetime() {
         //default and minimum value for time to remain on overworld map
-        Float lifetime = 20f;
+        float lifetime = 20f;
         return Math.max(data.lifetime, lifetime);
     }
 
@@ -632,7 +636,8 @@ public class EnemySprite extends CharacterSprite implements Steerable<Vector2> {
 
     }
 
-
-
+    public boolean isFrozen() {
+        return _freeze;
+    }
 }
 

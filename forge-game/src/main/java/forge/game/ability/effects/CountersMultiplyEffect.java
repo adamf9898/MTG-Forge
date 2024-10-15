@@ -42,7 +42,7 @@ public class CountersMultiplyEffect extends SpellAbilityEffect {
         final Player player = sa.getActivatingPlayer();
 
         final CounterType counterType = getCounterType(sa);
-        final int n = Integer.valueOf(sa.getParamOrDefault("Multiplier", "2")) - 1;
+        final int n = Integer.parseInt(sa.getParamOrDefault("Multiplier", "2")) - 1;
 
         GameEntityCounterTable table = new GameEntityCounterTable();
         for (final Card tgtCard : getTargetCards(sa)) {
@@ -50,7 +50,7 @@ public class CountersMultiplyEffect extends SpellAbilityEffect {
             // gameCard is LKI in that case, the card is not in game anymore
             // or the timestamp did change
             // this should check Self too
-            if (gameCard == null || !tgtCard.equalsWithTimestamp(gameCard)) {
+            if (gameCard == null || !tgtCard.equalsWithGameTimestamp(gameCard)) {
                 continue;
             }
             if (counterType != null) {

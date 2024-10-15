@@ -8,11 +8,7 @@ import com.google.common.collect.Maps;
 
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.SpellAbilityEffect;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardCollectionView;
-import forge.game.card.CardLists;
-import forge.game.card.CardUtil;
+import forge.game.card.*;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.PlayerZone;
@@ -45,7 +41,7 @@ public class PeekAndRevealEffect extends SpellAbilityEffect {
 
         final StringBuilder sb = new StringBuilder();
 
-        sb.append(who.equals("") ? peeker : who);
+        sb.append(who.isEmpty() ? peeker : who);
         sb.append(verb).append("the top ");
         sb.append(numPeek > 1 ? Lang.getNumeral(numPeek) + " cards " : "card ").append("of ").append(whose);
         sb.append(" library.");
@@ -65,17 +61,18 @@ public class PeekAndRevealEffect extends SpellAbilityEffect {
         String revealValid = sa.getParamOrDefault("RevealValid", "Card");
         String peekAmount = sa.getParamOrDefault("PeekAmount", "1");
         int numPeek = AbilityUtils.calculateAmount(source, peekAmount, sa);
+        final ZoneType srcZone = sa.hasParam("SourceZone") ? ZoneType.smartValueOf(sa.getParam("SourceZone")) : ZoneType.Library;
 
-        List<Player> libraryPlayers = getDefinedPlayersOrTargeted(sa);
+        List<Player> srcZonePlayers = getDefinedPlayersOrTargeted(sa);
         final Player peekingPlayer = sa.getActivatingPlayer();
 
-        for (Player libraryToPeek : libraryPlayers) {
-            final PlayerZone library = libraryToPeek.getZone(ZoneType.Library);
-            numPeek = Math.min(numPeek, library.size());
+        for (Player zoneToPeek : srcZonePlayers) {
+            final PlayerZone playerZone = zoneToPeek.getZone(srcZone);
+            numPeek = Math.min(numPeek, playerZone.size());
 
             CardCollection peekCards = new CardCollection();
             for (int i = 0; i < numPeek; i++) {
-                peekCards.add(library.get(i));
+                peekCards.add(playerZone.get(i));
             }
 
             Map<String, Object> params = new HashMap<>();
@@ -84,7 +81,7 @@ public class PeekAndRevealEffect extends SpellAbilityEffect {
             CardCollectionView revealableCards = CardLists.getValidCards(peekCards, revealValid, peekingPlayer, source, sa);
             boolean doReveal = !sa.hasParam("NoReveal") && !revealableCards.isEmpty();
             if (!noPeek) {
-                peekingPlayer.getController().reveal(peekCards, ZoneType.Library, libraryToPeek,
+                peekingPlayer.getController().reveal(peekCards, srcZone, zoneToPeek,
                         CardTranslation.getTranslatedName(source.getName()) + " - " +
                                 Localizer.getInstance().getMessage("lblLookingCardFrom"));
             }
@@ -93,26 +90,26 @@ public class PeekAndRevealEffect extends SpellAbilityEffect {
                 doReveal = peekingPlayer.getController().confirmAction(sa, null, Localizer.getInstance().getMessage("lblRevealCardToOtherPlayers"), params);
 
             if (doReveal) {
-                peekingPlayer.getGame().getAction().reveal(revealableCards, ZoneType.Library, libraryToPeek, !noPeek,
+                peekingPlayer.getGame().getAction().reveal(revealableCards, srcZone, zoneToPeek, !noPeek,
                         CardTranslation.getTranslatedName(source.getName()) + " - " +
                                 Localizer.getInstance().getMessage("lblRevealingCardFrom"));
 
                 if (rememberRevealed) {
                     Map<Integer, Card> cachedMap = Maps.newHashMap();
                     for (Card c : revealableCards) {
-                        source.addRemembered(CardUtil.getLKICopy(c, cachedMap));
+                        source.addRemembered(CardCopyService.getLKICopy(c, cachedMap));
                     }
                 }
                 if (imprintRevealed) {
                     Map<Integer, Card> cachedMap = Maps.newHashMap();
                     for (Card c : revealableCards) {
-                        source.addImprintedCard(CardUtil.getLKICopy(c, cachedMap));
+                        source.addImprintedCard(CardCopyService.getLKICopy(c, cachedMap));
                     }
                 }
             } else if (sa.hasParam("RememberPeeked")) {
                 Map<Integer, Card> cachedMap = Maps.newHashMap();
                 for (Card c : revealableCards) {
-                    source.addRemembered(CardUtil.getLKICopy(c, cachedMap));
+                    source.addRemembered(CardCopyService.getLKICopy(c, cachedMap));
                 }
             }
         }

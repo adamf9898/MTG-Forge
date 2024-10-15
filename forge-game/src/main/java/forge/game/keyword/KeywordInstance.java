@@ -25,7 +25,7 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
 
     private Keyword keyword;
     private String original;
-    private long staticId = 0;
+    private StaticAbility st = null;
     private long idx = -1;
 
     private List<Trigger> triggers = Lists.newArrayList();
@@ -54,7 +54,7 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
     @Override
     public String getReminderText() {
         String result = formatReminderText(keyword.reminderText);
-        Matcher m = Pattern.compile("\\{(\\w):(.+?)\\}").matcher(result);
+        Matcher m = Pattern.compile("\\{(\\w+):(.+?)\\}").matcher(result);
 
         StringBuffer sb = new StringBuffer();
         while (m.find()) {
@@ -106,7 +106,7 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
             Breadcrumb bread = new Breadcrumb(msg);
             bread.setData("Card", host.getName());
             bread.setData("Keyword", this.original);
-            Sentry.addBreadcrumb(bread, this);
+            Sentry.addBreadcrumb(bread);
 
             // add Extra for debugging
             Sentry.setExtra("Card", host.getName());
@@ -122,7 +122,7 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
             Breadcrumb bread = new Breadcrumb(msg);
             bread.setData("Card", host.getName());
             bread.setData("Keyword", this.original);
-            Sentry.addBreadcrumb(bread, this);
+            Sentry.addBreadcrumb(bread);
 
             //rethrow
             throw new RuntimeException("Error in Keyword " + this.original + " for card " + host.getName(), e);
@@ -157,7 +157,7 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
             Breadcrumb bread = new Breadcrumb(msg);
             bread.setData("Player", player.getName());
             bread.setData("Keyword", this.original);
-            Sentry.addBreadcrumb(bread, this);
+            Sentry.addBreadcrumb(bread);
 
             // add Extra for debugging
             Sentry.setExtra("Player", player.getName());
@@ -173,7 +173,7 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
             Breadcrumb bread = new Breadcrumb(msg);
             bread.setData("Player", player.getName());
             bread.setData("Keyword", this.original);
-            Sentry.addBreadcrumb(bread, this);
+            Sentry.addBreadcrumb(bread);
 
             //rethrow
             throw new RuntimeException("Error in Keyword " + this.original + " for player " + player.getName(), e);
@@ -303,7 +303,15 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
      */
     @Override
     public boolean redundant(Collection<KeywordInterface> list) {
-        return !list.isEmpty() && keyword.isMultipleRedundant;
+        if (!keyword.isMultipleRedundant) {
+            return false;
+        }
+        for (KeywordInterface i : list) {
+            if (i.getOriginal().equals(getOriginal())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -358,12 +366,12 @@ public abstract class KeywordInstance<T extends KeywordInstance<?>> implements K
             sa.setIntrinsic(value);
         }
     }
-    
-    public long getStaticId() {
-        return this.staticId;
+
+    public StaticAbility getStatic() {
+        return this.st;
     }
-    public void setStaticId(long v) {
-        this.staticId = v;
+    public void setStatic(StaticAbility st) {
+        this.st = st;
     }
 
     public long getIdx() {

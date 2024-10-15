@@ -3,21 +3,13 @@ package forge.ai.ability;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.base.Predicate;
-
 import forge.ai.ComputerUtilCard;
 import forge.ai.ComputerUtilCost;
 import forge.ai.SpellAbilityAi;
 import forge.card.CardStateName;
 
 import forge.game.ability.AbilityUtils;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardLists;
-import forge.game.card.CardPredicates;
-import forge.game.card.CardState;
-import forge.game.card.CardUtil;
-import forge.game.card.CounterEnumType;
+import forge.game.card.*;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
@@ -33,7 +25,7 @@ public class SetStateAi extends SpellAbilityAi {
 
         // turning face is most likely okay
         // TODO only do this at beneficial moment (e.g. surprise during combat or morph trigger), might want to reserve mana to protect them from easy removal
-        if ("TurnFace".equals(mode)) {
+        if ("TurnFaceUp".equals(mode) || "TurnFaceDown".equals(mode)) {
             return true;
         }
 
@@ -81,12 +73,7 @@ public class SetStateAi extends SpellAbilityAi {
                 sa.resetTargets();
 
                 // select only the ones that can transform
-                CardCollection list = CardLists.filter(CardUtil.getValidCardsToTarget(sa), CardPredicates.Presets.CREATURES, new Predicate<Card>() {
-                    @Override
-                    public boolean apply(Card c) {
-                        return c.canTransform(sa);
-                    }
-                });
+                CardCollection list = CardLists.filter(CardUtil.getValidCardsToTarget(sa), CardPredicates.Presets.CREATURES, c -> c.canTransform(sa));
 
                 if (list.isEmpty()) {
                     return false;
@@ -103,7 +90,7 @@ public class SetStateAi extends SpellAbilityAi {
 
                 return sa.isMinTargetChosen();
             }
-        } else if ("TurnFace".equals(mode)) {
+        } else if ("TurnFaceUp".equals(mode) || "TurnFaceDown".equals(mode)) {
             if (sa.usesTargeting()) {
                 sa.resetTargets();
 
@@ -114,7 +101,7 @@ public class SetStateAi extends SpellAbilityAi {
                 }
 
                 for (final Card c : list) {
-                    if (shouldTurnFace(c, ai, ph) || "Always".equals(logic)) {
+                    if (shouldTurnFace(c, ai, ph, mode) || "Always".equals(logic)) {
                         sa.getTargets().add(c);
                         if (!sa.canAddMoreTarget()) {
                             break;
@@ -128,7 +115,7 @@ public class SetStateAi extends SpellAbilityAi {
                 if (list.isEmpty()) {
                     return false;
                 }
-                return shouldTurnFace(list.get(0), ai, ph) || "Always".equals(logic);
+                return shouldTurnFace(list.get(0), ai, ph, mode) || "Always".equals(logic);
             }
         }
         return true;
@@ -141,7 +128,7 @@ public class SetStateAi extends SpellAbilityAi {
         }
 
         // need a copy for evaluation
-        Card transformed = CardUtil.getLKICopy(card);
+        Card transformed = CardCopyService.getLKICopy(card);
         transformed.getCurrentState().copyFrom(card.getAlternateState(), true);
         transformed.updateStateForView();
 
@@ -150,8 +137,11 @@ public class SetStateAi extends SpellAbilityAi {
         return compareCards(card, transformed, ai, ph);
     }
 
-    private boolean shouldTurnFace(Card card, Player ai, PhaseHandler ph) {
+    private boolean shouldTurnFace(Card card, Player ai, PhaseHandler ph, String mode) {
         if (card.isFaceDown()) {
+            if ("TurnFaceDown".equals(mode)) {
+                return false;
+            }
             // hidden agenda
             if (card.getState(CardStateName.Original).hasIntrinsicKeyword("Hidden agenda")
                     && card.isInZone(ZoneType.Command)) {
@@ -165,10 +155,13 @@ public class SetStateAi extends SpellAbilityAi {
             }
 
             // non-permanent facedown can't be turned face up
-            if (!card.getRules().getType().isPermanent()) {
+            if (!card.getRules().getType().isPermanent() || !card.canBeTurnedFaceUp()) {
                 return false;
             }            
         } else {
+            if ("TurnFaceUp".equals(mode)) {
+                return false;
+            }
             // doublefaced or meld cards can't be turned face down
             if (card.isTransformable() || card.isMeldable()) {
                 return false;
@@ -176,7 +169,7 @@ public class SetStateAi extends SpellAbilityAi {
         }
 
         // need a copy for evaluation
-        Card transformed = CardUtil.getLKICopy(card);
+        Card transformed = CardCopyService.getLKICopy(card);
         if (!card.isFaceDown()) {
             transformed.turnFaceDown(true);
         } else {

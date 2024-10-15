@@ -5,11 +5,13 @@ Swamp:Swamps
 Mountain:Mountains
 Forest:Forests
 [LandTypes]
+Cave:Caves
 Desert:Deserts
 Gate:Gates
 Lair
 Locus
 Mine
+Omenpath
 Power-Plant
 Sphere:Spheres
 Tower
@@ -17,12 +19,14 @@ Urza's
 [CreatureTypes]
 Advisor:Advisors
 Aetherborn:Aetherborn
+Alien:Aliens
 Ally:Allies
 Angel:Angels
 Antelope:Antelopes
 Ape:Apes
 Archer:Archers
 Archon:Archons
+Armadillo:Armadillos
 Artificer:Artificers
 Army:Armies
 Assassin:Assassins
@@ -39,6 +43,7 @@ Basilisk:Basilisks
 Bat:Bats
 Bear:Bears
 Beast:Beasts
+Beaver:Beavers
 Beeble:Beebles
 Beholder:Beholders
 Berserker:Berserkers
@@ -51,11 +56,11 @@ Brushwagg:Brushwaggs
 Camarid:Camarids
 C'tan:C'tan
 Camel:Camels
+Capybara:Capybaras
 Caribou:Caribous
 Carrier:Carriers
 Cat:Cats
 Centaur:Centaurs
-Cephalid:Cephalids
 Chimera:Chimeras
 Citizen:Citizens
 Clamfolk:Clamfolk
@@ -65,12 +70,14 @@ Cockatrice:Cockatrices
 Construct:Constructs
 Cow:Cows
 Coward:Cowards
+Coyote:Coyotes
 Crab:Crabs
 Crocodile:Crocodiles
 Cyberman:Cybermen
 Cyborg:Cyborgs
 Cyclops:Cyclopes
 Dalek:Daleks
+Detective:Detectives
 Dauthi:Dauthis
 Demigod:Demigods
 Demon:Demons
@@ -149,7 +156,7 @@ Kangaroo:Kangaroos
 Kavu:Kavu
 Killbot:Killbots
 Kirin:Kirins
-Kithkin:Kithkins
+Kithkin:Kithkin
 Knight:Knights
 Kobold:Kobolds
 Kor:Kors
@@ -161,6 +168,7 @@ Leviathan:Leviathans
 Lhurgoyf:Lhurgoyfs
 Licid:Licids
 Lizard:Lizards
+Llama:Llamas
 Lobster:Lobsters
 Mammoth:Mammoths
 Manticore:Manticores
@@ -176,12 +184,12 @@ Monger:Mongers
 Mongoose:Mongooses
 Monk:Monks
 Monkey:Monkeys
-Moonfolk:Moonfolks
+Moonfolk:Moonfolk
+Mount:Mounts
 Mouse:Mice
 Mutant:Mutants
 Myr:Myrs
 Mystic:Mystics
-Naga:Nagas
 Nautilus:Nautili
 Necron:Necrons
 Nephilim:Nephilims
@@ -214,10 +222,13 @@ Pilot:Pilots
 Pincher:Pinchers
 Pirate:Pirates
 Plant:Plants
+Porcupine:Porcupines
+Possum:Possums
 Praetor:Praetors
 Primarch:Primarchs
 Prism:Prisms
 Processor:Processors
+Raccoon:Raccoons
 Rabbit:Rabbits
 Ranger:Rangers
 Rat:Rats
@@ -249,9 +260,12 @@ Shark:Sharks
 Sheep:Sheep
 Siren:Sirens
 Skeleton:Skeletons
+Skunk:Skunks
 Slith:Sliths
 Sliver:Slivers
+Sloth:Sloths
 Slug:Slugs
+Snail:Snails
 Snake:Snakes
 Soldier:Soldiers
 Soltari:Soltaris
@@ -269,6 +283,7 @@ Squid:Squids
 Squirrel:Squirrels
 Starfish:Starfish
 Surrakar:Surrakars
+Synth:Synths
 Survivor:Survivors
 Tentacle:Tentacles
 Tetravite:Tetravites
@@ -277,7 +292,8 @@ Thopter:Thopters
 Thrull:Thrulls
 Tiefling:Tieflings
 Time Lord:Time Lords
-Treefolk:Treefolks
+Toy:Toys
+Treefolk:Treefolk
 Trilobite:Trilobites
 Triskelavite:Triskelavites
 Troll:Trolls
@@ -285,12 +301,13 @@ Turtle:Turtles
 Tyranid:Tyranids
 Unicorn:Unicorns
 Vampire:Vampires
+Varmint:Varmints
 Vedalken:Vedalkens
-Viashino:Viashinos
 Volver:Volvers
 Wall:Walls
 Warlock:Warlocks
 Warrior:Warriors
+Weasel:Weasels
 Weird:Weirds
 Werewolf:Werewolves
 Whale:Whales
@@ -307,32 +324,39 @@ Zubera:Zuberas
 [SpellTypes]
 Adventure
 Arcane
+Chorus
 Lesson
 Trap
 [EnchantmentTypes]
-Aura
+Aura:Auras
 Background
 Cartouche
+Case
 Class
-Curse
+Curse:Curses
 Role
+Room
 Rune
-Saga
-Shrine
+Saga:Sagas
+Shrine:Shrines
 Shard
 [ArtifactTypes]
+Attraction
 Blood
+Bobblehead:Bobbleheads
 Clue:Clues
-Contraption
+Contraption:Contraptions
 Equipment
-Food
+Food:Foods
 Fortification
 Gold
 Incubator:Incubators
+Junk
 Key:Keys
-Powerstone
-Treasure
-Vehicle
+Map
+Powerstone:Powerstones
+Treasure:Treasures
+Vehicle:Vehicles
 [WalkerTypes]
 Ajani
 Aminatou
@@ -350,6 +374,7 @@ Dack
 Dakkon
 Daretti
 Davriel
+Deb
 Dihada
 Domri
 Dovin
@@ -367,6 +392,7 @@ Guff
 Huatli
 Inzerva
 Jace
+Jared
 Jaya
 Jeska
 Kaito
@@ -386,6 +412,7 @@ Niko
 Nissa
 Nixilis
 Oko
+Quintorius
 Ral
 Rowan
 Saheeli
@@ -396,6 +423,7 @@ Sorin
 Stone
 Szat
 Tamiyo
+Tasha
 Teferi
 Teyo
 Tezzeret
@@ -419,10 +447,12 @@ Undercity
 [BattleTypes]
 Siege
 [PlanarTypes]
+Androzani Minor
 Alara
 Alfava Metraxis
 Amonkhet
 Antausia
+Apalapucia
 Arcavios
 Arkhos
 Azgol
@@ -430,6 +460,7 @@ Belenon
 Bolas's Meditation Realm
 Capenna
 Cridhe
+Darillium
 Dominaria
 Earth
 Echoir
@@ -441,6 +472,7 @@ Fiora
 Gallifrey
 Gargantikar
 Gobakhan
+Horsehead Nebula
 Ikoria
 Innistrad
 Iquatana
@@ -449,6 +481,7 @@ Ixalan
 Kaladesh
 Kaldheim
 Kamigawa
+Kandoka
 Karsus
 Kephalai
 Kinshala
@@ -462,8 +495,12 @@ Mercadia
 Mirrodin
 Moag
 Mongseng
+Moon
 Muraganda
+Necros
+New Earth
 New Phyrexia
+Outside Mutter's Spiral
 Phyrexia
 Pyrulea
 Rabiah
@@ -476,11 +513,13 @@ Shadowmoor
 Shandalar
 Shenmeng
 Skaro
+Spacecraft
 Tarkir
 The Abyss
 The Dalek Asylum
 The Library
 Theros
+Time
 Trenzalore
 Ulgrotha
 Valla

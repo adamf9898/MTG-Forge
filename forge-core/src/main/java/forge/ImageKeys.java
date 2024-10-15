@@ -23,7 +23,9 @@ public final class ImageKeys {
 
     public static final String HIDDEN_CARD           = "hidden";
     public static final String MORPH_IMAGE           = "morph";
+    public static final String DISGUISED_IMAGE       = "disguised";
     public static final String MANIFEST_IMAGE        = "manifest";
+    public static final String CLOAKED_IMAGE         = "cloaked";
     public static final String FORETELL_IMAGE        = "foretell";
 
     public static final String BACKFACE_POSTFIX  = "$alt";
@@ -321,7 +323,7 @@ public final class ImageKeys {
     }
     public static boolean hasSetLookup(String filename) {
         if (!StaticData.instance().getSetLookup().isEmpty()) {
-            return StaticData.instance().getSetLookup().keySet().stream().anyMatch(setKey -> filename.startsWith(setKey));
+            return StaticData.instance().getSetLookup().keySet().stream().anyMatch(filename::startsWith);
         }
 
         return false;
@@ -335,7 +337,7 @@ public final class ImageKeys {
                         File f = new File(lookupDirectory);
                         if (f.exists() && f.isDirectory()) {
                             for (String ext : FILE_EXTENSIONS) {
-                                if (ext.equals(""))
+                                if (ext.isEmpty())
                                     continue;
                                 File placeholder;
                                 String fb1 = fullborderFile.replace(setKey+"/","")+ext;
@@ -369,7 +371,7 @@ public final class ImageKeys {
     private static File findFile(String dir, String filename) {
         if (dir.equals(CACHE_CARD_PICS_DIR)) {
             for (String ext : FILE_EXTENSIONS) {
-                if (ext.equals(""))
+                if (ext.isEmpty())
                     continue;
 
                 File f = new File(dir, filename + ext);
@@ -406,7 +408,7 @@ public final class ImageKeys {
             CardEdition ed = StaticData.instance().getEditions().get(setFolder);
             if (ed != null && !editionAlias.containsKey(setFolder)) {
                 String alias = ed.getAlias();
-                Set aliasSet = new HashSet<>();
+                Set<String> aliasSet = new HashSet<>();
                 if (alias != null) {
                     if (!alias.equalsIgnoreCase(setFolder))
                         aliasSet.add(alias);

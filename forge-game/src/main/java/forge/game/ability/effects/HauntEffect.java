@@ -1,10 +1,12 @@
 package forge.game.ability.effects;
 
+import java.util.Map;
+
 import forge.game.Game;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
-import forge.game.card.CardCollection;
+import forge.game.card.CardZoneTable;
 import forge.game.spellability.SpellAbility;
 
 public class HauntEffect extends SpellAbilityEffect {
@@ -12,7 +14,7 @@ public class HauntEffect extends SpellAbilityEffect {
     @Override
     public void resolve(SpellAbility sa) {
         Card host = sa.getHostCard();
-        if (host.isPermanent()) {
+        if (host.isPermanent() && sa.hasTriggeringObject(AbilityKey.NewCard)) {
             // get new version instead of battlefield lki
             host = (Card) sa.getTriggeringObject(AbilityKey.NewCard);
         }
@@ -20,10 +22,13 @@ public class HauntEffect extends SpellAbilityEffect {
         Card card = game.getCardState(host, null);
         if (card == null) {
             return;
-        } else if (sa.usesTargeting() && !card.isToken() && host.equalsWithTimestamp(card)) {
+        } else if (sa.usesTargeting() && !card.isToken() && host.equalsWithGameTimestamp(card)) {
             // haunt target but only if card is no token and still in grave
-            final Card copy = game.getAction().exile(new CardCollection(card), sa, null).get(0);
-            sa.getTargetCard().addHauntedBy(copy);
+            Map<AbilityKey, Object> moveParams = AbilityKey.newMap();
+            CardZoneTable zoneMovements = AbilityKey.addCardZoneTableParams(moveParams, sa);
+            final Card moved = game.getAction().exile(card, sa, moveParams);
+            sa.getTargetCard().addHauntedBy(moved);
+            zoneMovements.triggerChangesZoneAll(game, sa);
         } else if (!sa.usesTargeting() && card.getHaunting() != null) {
             // unhaunt
             card.getHaunting().removeHauntedBy(card);

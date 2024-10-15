@@ -2,6 +2,7 @@ package forge.trackable;
 
 
 import forge.card.CardRarity;
+import forge.card.GamePieceType;
 import forge.game.Direction;
 import forge.game.EvenOdd;
 import forge.game.GameType;
@@ -23,7 +24,8 @@ public enum TrackableProperty {
     Controller(TrackableTypes.PlayerViewType),
     Zone(TrackableTypes.EnumType(ZoneType.class)),
 
-    IsImmutable(TrackableTypes.BooleanType),
+    GamePieceType(TrackableTypes.EnumType(GamePieceType.class)),
+
     IsEmblem(TrackableTypes.BooleanType),
     IsBoon(TrackableTypes.BooleanType),
     CanSpecialize(TrackableTypes.BooleanType),
@@ -32,6 +34,7 @@ public enum TrackableProperty {
     Facedown(TrackableTypes.BooleanType),
     Foretold(TrackableTypes.BooleanType),
     Manifested(TrackableTypes.BooleanType),
+    Cloaked(TrackableTypes.BooleanType),
     Modal(TrackableTypes.BooleanType),
     Adventure(TrackableTypes.BooleanType),
     DoubleFaced(TrackableTypes.BooleanType),
@@ -66,13 +69,16 @@ public enum TrackableProperty {
     ChosenColors(TrackableTypes.StringListType),
     ChosenCards(TrackableTypes.CardViewCollectionType),
     ChosenNumber(TrackableTypes.StringType),
+    StoredRolls(TrackableTypes.StringListType),
     ChosenPlayer(TrackableTypes.PlayerViewType),
+    PromisedGift(TrackableTypes.PlayerViewType),
     ProtectingPlayer(TrackableTypes.PlayerViewType),
     ChosenDirection(TrackableTypes.EnumType(Direction.class)),
     ChosenEvenOdd(TrackableTypes.EnumType(EvenOdd.class)),
     ChosenMode(TrackableTypes.StringType),
     ChosenSector(TrackableTypes.StringType),
-    Sector(TrackableTypes.StringType),
+    Sector(TrackableTypes.StringListType),
+    DraftAction(TrackableTypes.StringListType),
     ClassLevel(TrackableTypes.IntegerType),
     RingLevel(TrackableTypes.IntegerType),
     CurrentRoom(TrackableTypes.StringType),
@@ -117,12 +123,14 @@ public enum TrackableProperty {
     ManaCost(TrackableTypes.ManaCostType),
     SetCode(TrackableTypes.StringType),
     Rarity(TrackableTypes.EnumType(CardRarity.class)),
+    FunctionalVariant(TrackableTypes.StringType),
     OracleText(TrackableTypes.StringType),
     RulesText(TrackableTypes.StringType),
     Power(TrackableTypes.IntegerType),
     Toughness(TrackableTypes.IntegerType),
     Loyalty(TrackableTypes.StringType),
     Defense(TrackableTypes.StringType),
+    AttractionLights(TrackableTypes.IntegerSetType),
     ChangedColorWords(TrackableTypes.StringMapType),
     HasChangedColors(TrackableTypes.BooleanType),
     ChangedTypes(TrackableTypes.StringMapType),
@@ -140,6 +148,7 @@ public enum TrackableProperty {
     CountBasicLandTypes(TrackableTypes.IntegerType),
 
     KeywordKey(TrackableTypes.StringType),
+    HasAnnihilator(TrackableTypes.BooleanType),
     HasDeathtouch(TrackableTypes.BooleanType),
     HasToxic(TrackableTypes.BooleanType),
     HasDevoid(TrackableTypes.BooleanType),
@@ -147,6 +156,7 @@ public enum TrackableProperty {
     HasDivideDamage(TrackableTypes.BooleanType),
     HasDoubleStrike(TrackableTypes.BooleanType),
     HasDoubleTeam(TrackableTypes.BooleanType),
+    HasExalted(TrackableTypes.BooleanType),
     HasFirstStrike(TrackableTypes.BooleanType),
     HasFlying(TrackableTypes.BooleanType),
     HasFear(TrackableTypes.BooleanType),
@@ -170,6 +180,8 @@ public enum TrackableProperty {
     HasHaste(TrackableTypes.BooleanType),
     HasInfect(TrackableTypes.BooleanType),
     HasStorm(TrackableTypes.BooleanType),
+    HasWard(TrackableTypes.BooleanType),
+    HasWither(TrackableTypes.BooleanType),
     YouMayLook(TrackableTypes.BooleanType),
     OpponentMayLook(TrackableTypes.BooleanType),
     BlockAdditional(TrackableTypes.IntegerType),
@@ -195,10 +207,12 @@ public enum TrackableProperty {
     HasUnlimitedLandPlay(TrackableTypes.BooleanType),
     NumLandThisTurn(TrackableTypes.IntegerType),
     NumManaShards(TrackableTypes.IntegerType),
+    DraftNotes(TrackableTypes.StringMapType),
     NumDrawnThisTurn(TrackableTypes.IntegerType),
     AdditionalVote(TrackableTypes.IntegerType),
     OptionalAdditionalVote(TrackableTypes.IntegerType),
     ControlVotes(TrackableTypes.BooleanType),
+    AdditionalVillainousChoices(TrackableTypes.IntegerType),
     Keywords(TrackableTypes.KeywordCollectionViewType, FreezeMode.IgnoresFreeze),
     Commander(TrackableTypes.CardViewCollectionType, FreezeMode.IgnoresFreeze),
     CommanderCast(TrackableTypes.IntegerMapType),
@@ -226,6 +240,14 @@ public enum TrackableProperty {
     Description(TrackableTypes.StringType),
     CanPlay(TrackableTypes.BooleanType),
     PromptIfOnlyPossibleAbility(TrackableTypes.BooleanType),
+
+    //ReplacementEffectView
+    RE_HostCard(TrackableTypes.CardViewType),
+    RE_Description(TrackableTypes.StringType),
+
+    //StaticAbilityView
+    ST_HostCard(TrackableTypes.CardViewType),
+    ST_Description(TrackableTypes.StringType),
 
     //HasBackSide
     BackSideName(TrackableTypes.StringType),

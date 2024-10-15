@@ -17,7 +17,6 @@
  */
 package forge.item;
 
-import com.google.common.base.Function;
 import forge.ImageKeys;
 import forge.StaticData;
 import forge.card.*;
@@ -25,10 +24,10 @@ import forge.util.CardTranslation;
 import forge.util.ImageUtil;
 import forge.util.Localizer;
 import forge.util.TextUtil;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.Serializable;
 
 /**
  * A lightweight version of a card that matches real-world cards, to use outside of games (eg. inventory, decks, trade).
@@ -37,7 +36,7 @@ import java.io.Serializable;
  *
  * @author Forge
  */
-public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, IPaperCard, Serializable {
+public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, IPaperCard {
     private static final long serialVersionUID = 2942081982620691205L;
 
     // Reference to rules
@@ -56,6 +55,7 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
     private final boolean foil;
     private Boolean hasImage;
     private String sortableName;
+    private final String functionalVariant;
 
     // Calculated fields are below:
     private transient CardRarity rarity; // rarity is given in ctor when set is assigned
@@ -77,6 +77,11 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
         if (collectorNumber == null)
             collectorNumber = IPaperCard.NO_COLLECTOR_NUMBER;
         return collectorNumber;
+    }
+
+    @Override
+    public String getFunctionalVariant() {
+        return functionalVariant;
     }
 
     @Override
@@ -120,7 +125,7 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
 
         if (this.foiledVersion == null) {
             this.foiledVersion = new PaperCard(this.rules, this.edition, this.rarity,
-                    this.artIndex, true, String.valueOf(collectorNumber), this.artist);
+                    this.artIndex, true, String.valueOf(collectorNumber), this.artist, this.functionalVariant);
         }
         return this.foiledVersion;
     }
@@ -129,14 +134,9 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
             return this;
 
         PaperCard unFoiledVersion = new PaperCard(this.rules, this.edition, this.rarity,
-                this.artIndex, false, String.valueOf(collectorNumber), this.artist);
+                this.artIndex, false, String.valueOf(collectorNumber), this.artist, this.functionalVariant);
         return unFoiledVersion;
     }
-
-//    @Override
-//    public String getImageKey() {
-//        return getImageLocator(getImageName(), getArtIndex(), true, false);
-//    }
 
     @Override
     public String getItemType() {
@@ -154,29 +154,14 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
         return hasImage;
     }
 
-    /**
-     * Lambda to get rules for selects from list of printed cards.
-     */
-    public static final Function<PaperCard, CardRules> FN_GET_RULES = new Function<PaperCard, CardRules>() {
-        @Override
-        public CardRules apply(final PaperCard from) {
-            return from.rules;
-        }
-    };
-    public static final Function<PaperCard, String> FN_GET_NAME = new Function<PaperCard, String>() {
-        @Override
-        public String apply(final PaperCard from) {
-            return from.getName();
-        }
-    };
-
     public PaperCard(final CardRules rules0, final String edition0, final CardRarity rarity0) {
         this(rules0, edition0, rarity0, IPaperCard.DEFAULT_ART_INDEX, false,
-                IPaperCard.NO_COLLECTOR_NUMBER, IPaperCard.NO_ARTIST_NAME);
+                IPaperCard.NO_COLLECTOR_NUMBER, IPaperCard.NO_ARTIST_NAME, IPaperCard.NO_FUNCTIONAL_VARIANT);
     }
 
     public PaperCard(final CardRules rules0, final String edition0, final CardRarity rarity0,
-                     final int artIndex0, final boolean foil0, final String collectorNumber0, final String artist0) {
+                     final int artIndex0, final boolean foil0, final String collectorNumber0,
+                     final String artist0, final String functionalVariant) {
         if (rules0 == null || edition0 == null || rarity0 == null) {
             throw new IllegalArgumentException("Cannot create card without rules, edition or rarity");
         }
@@ -191,7 +176,10 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
         // If the user changes the language this will make cards sort by the old language until they restart the game.
         // This is a good tradeoff
         sortableName = TextUtil.toSortableName(CardTranslation.getTranslatedName(rules0.getName()));
+        this.functionalVariant = functionalVariant != null ? functionalVariant : IPaperCard.NO_FUNCTIONAL_VARIANT;
     }
+
+    public static PaperCard FAKE_CARD = new PaperCard(CardRules.getUnsupportedCardNamed("Fake Card"), "Fake Edition", CardRarity.Common);
 
     // Want this class to be a key for HashTable
     @Override
@@ -311,7 +299,8 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
 
     @Override
     public String getImageKey(boolean altState) {
-        String imageKey = ImageKeys.CARD_PREFIX + name + CardDb.NameSetSeparator
+        String noramlizedName = StringUtils.stripAccents(name);
+        String imageKey = ImageKeys.CARD_PREFIX + noramlizedName + CardDb.NameSetSeparator
                 + edition + CardDb.NameSetSeparator + artIndex;
         if (altState) {
             imageKey += ImageKeys.BACKFACE_POSTFIX;
@@ -404,6 +393,29 @@ public class PaperCard implements Comparable<IPaperCard>, InventoryItemFromSet, 
         CardSplitType cst = this.rules.getSplitType();
         return cst == CardSplitType.Transform || cst == CardSplitType.Flip || cst == CardSplitType.Meld
                 || cst == CardSplitType.Modal;
+    }
+
+    @Override
+    public ICardFace getMainFace() {
+        ICardFace face = this.rules.getMainPart();
+        return this.getVariantForFace(face);
+    }
+
+    @Override
+    public ICardFace getOtherFace() {
+        ICardFace face = this.rules.getOtherPart();
+        return this.getVariantForFace(face);
+    }
+
+    private ICardFace getVariantForFace(ICardFace face) {
+        if(!face.hasFunctionalVariants() || this.functionalVariant.equals(NO_FUNCTIONAL_VARIANT))
+            return face;
+        ICardFace variant = face.getFunctionalVariant(this.functionalVariant);
+        if(variant == null) {
+            System.err.printf("Tried to apply unknown or unsupported variant - Card: \"%s\"; Variant: %s\n", face.getName(), this.functionalVariant);
+            return face;
+        }
+        return variant;
     }
 
     // Return true if card is one of the five basic lands that can be added for free

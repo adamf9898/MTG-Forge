@@ -1,17 +1,12 @@
 package forge.ai;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import com.google.common.base.Function;
 import forge.ai.simulation.GameStateEvaluator;
 import forge.card.mana.ManaCost;
+import forge.game.card.*;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -34,14 +29,6 @@ import forge.game.Game;
 import forge.game.GameObject;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardCollectionView;
-import forge.game.card.CardFactory;
-import forge.game.card.CardFactoryUtil;
-import forge.game.card.CardLists;
-import forge.game.card.CardPredicates;
-import forge.game.card.CounterEnumType;
 import forge.game.combat.Combat;
 import forge.game.combat.CombatUtil;
 import forge.game.cost.Cost;
@@ -71,12 +58,7 @@ public class ComputerUtilCard {
     public static Card getMostExpensivePermanentAI(final CardCollectionView list, final SpellAbility spell, final boolean targeted) {
         CardCollectionView all = list;
         if (targeted) {
-            all = CardLists.filter(all, new Predicate<Card>() {
-                @Override
-                public boolean apply(final Card c) {
-                    return c.canBeTargetedBy(spell);
-                }
-            });
+            all = CardLists.filter(all, c -> c.canBeTargetedBy(spell));
         }
         return getMostExpensivePermanentAI(all);
     }
@@ -90,7 +72,7 @@ public class ComputerUtilCard {
      * @param list
      */
     public static void sortByEvaluateCreature(final CardCollection list) {
-        Collections.sort(list, ComputerUtilCard.EvaluateCreatureComparator);
+        list.sort(ComputerUtilCard.EvaluateCreatureComparator);
     }
 
     // The AI doesn't really pick the best artifact, just the most expensive.
@@ -109,7 +91,7 @@ public class ComputerUtilCard {
             return null;
         }
         // get biggest Artifact
-        return Aggregates.itemWithMax(all, CardPredicates.Accessors.fnGetCmc);
+        return Aggregates.itemWithMax(all, Card::getCMC);
     }
 
     /**
@@ -124,7 +106,7 @@ public class ComputerUtilCard {
             return null;
         }
         // no AI logic, just return most expensive
-        return Aggregates.itemWithMax(all, CardPredicates.Accessors.fnGetCmc);
+        return Aggregates.itemWithMax(all, Card::getCMC);
     }
 
     /**
@@ -139,7 +121,7 @@ public class ComputerUtilCard {
             return null;
         }
         // no AI logic, just return least expensive
-        return Aggregates.itemWithMin(all, CardPredicates.Accessors.fnGetCmc);
+        return Aggregates.itemWithMin(all, Card::getCMC);
     }
 
     public static Card getBestPlaneswalkerToDamage(final List<Card> pws) {
@@ -207,16 +189,11 @@ public class ComputerUtilCard {
     public static Card getBestEnchantmentAI(final List<Card> list, final SpellAbility spell, final boolean targeted) {
         List<Card> all = CardLists.filter(list, CardPredicates.Presets.ENCHANTMENTS);
         if (targeted) {
-            all = CardLists.filter(all, new Predicate<Card>() {
-                @Override
-                public boolean apply(final Card c) {
-                    return c.canBeTargetedBy(spell);
-                }
-            });
+            all = CardLists.filter(all, c -> c.canBeTargetedBy(spell));
         }
 
         // get biggest Enchantment
-        return Aggregates.itemWithMax(all, CardPredicates.Accessors.fnGetCmc);
+        return Aggregates.itemWithMax(all, Card::getCMC);
     }
 
     /**
@@ -237,7 +214,26 @@ public class ComputerUtilCard {
         final List<Card> nbLand = CardLists.filter(land, Predicates.not(CardPredicates.Presets.BASIC_LANDS));
 
         if (!nbLand.isEmpty()) {
-            // TODO - Rank non basics?
+            // TODO - Improve ranking various non-basic lands depending on context
+
+            // Urza's Mine/Tower/Power Plant
+            final CardCollectionView aiAvailable = nbLand.get(0).getController().getCardsIn(Arrays.asList(ZoneType.Battlefield, ZoneType.Hand));
+            if (Iterables.any(list, CardPredicates.nameEquals("Urza's Mine"))) {
+                if (CardLists.filter(aiAvailable, CardPredicates.nameEquals("Urza's Mine")).isEmpty()) {
+                    return CardLists.filter(nbLand, CardPredicates.nameEquals("Urza's Mine")).getFirst();
+                }
+            }
+            if (Iterables.any(list, CardPredicates.nameEquals("Urza's Tower"))) {
+                if (CardLists.filter(aiAvailable, CardPredicates.nameEquals("Urza's Tower")).isEmpty()) {
+                    return CardLists.filter(nbLand, CardPredicates.nameEquals("Urza's Tower")).getFirst();
+                }
+            }
+            if (Iterables.any(list, CardPredicates.nameEquals("Urza's Power Plant"))) {
+                if (CardLists.filter(aiAvailable, CardPredicates.nameEquals("Urza's Power Plant")).isEmpty()) {
+                    return CardLists.filter(nbLand, CardPredicates.nameEquals("Urza's Power Plant")).getFirst();
+                }
+            }
+
             return Aggregates.random(nbLand);
         }
 
@@ -336,12 +332,7 @@ public class ComputerUtilCard {
      */
     public static Card getCheapestPermanentAI(Iterable<Card> all, final SpellAbility spell, final boolean targeted) {
         if (targeted) {
-            all = CardLists.filter(all, new Predicate<Card>() {
-                @Override
-                public boolean apply(final Card c) {
-                    return c.canBeTargetedBy(spell);
-                }
-            });
+            all = CardLists.filter(all, c -> c.canBeTargetedBy(spell));
         }
         if (Iterables.isEmpty(all)) {
             return null;
@@ -404,7 +395,7 @@ public class ComputerUtilCard {
         if (Iterables.size(list) == 1) {
             return Iterables.get(list, 0);
         }
-        return Aggregates.itemWithMax(Iterables.filter(list, CardPredicates.Presets.LANDS), ComputerUtilCard.landEvaluator);
+        return Aggregates.itemWithMax(Iterables.filter(list, Card::hasPlayableLandFace), ComputerUtilCard.landEvaluator);
     }
 
     /**
@@ -518,12 +509,10 @@ public class ComputerUtilCard {
         }
 
         if (hasEnchantmants || hasArtifacts) {
-            final List<Card> ae = CardLists.filter(list, Predicates.and(Predicates.or(CardPredicates.Presets.ARTIFACTS, CardPredicates.Presets.ENCHANTMENTS), new Predicate<Card>() {
-                @Override
-                public boolean apply(Card card) {
-                    return !card.hasSVar("DoNotDiscardIfAble");
-                }
-            }));
+            final List<Card> ae = CardLists.filter(list, Predicates.and(
+                    Predicates.or(CardPredicates.Presets.ARTIFACTS, CardPredicates.Presets.ENCHANTMENTS),
+                    card -> !card.hasSVar("DoNotDiscardIfAble")
+            ));
             return getCheapestPermanentAI(ae, null, false);
         }
 
@@ -539,11 +528,12 @@ public class ComputerUtilCard {
         if (!Iterables.isEmpty(list)) {
             CardCollection cc = CardLists.filter(list,
                     Predicates.or(CardPredicates.isType("Instant"), CardPredicates.isType("Sorcery")));
-            Collections.sort(cc, CardLists.CmcComparatorInv);
 
             if (cc.isEmpty()) {
                 return null;
             }
+
+            cc.sort(CardLists.CmcComparatorInv);
 
             Card cheapest = cc.getLast();
             if (cheapest.hasSVar("DoNotDiscardIfAble")) {
@@ -561,18 +551,10 @@ public class ComputerUtilCard {
         return null;
     }
 
-    public static final Comparator<Card> EvaluateCreatureComparator = new Comparator<Card>() {
-        @Override
-        public int compare(final Card a, final Card b) {
-            return evaluateCreature(b) - evaluateCreature(a);
-        }
-    };
-    public static final Comparator<SpellAbility> EvaluateCreatureSpellComparator = new Comparator<SpellAbility>() {
-        @Override
-        public int compare(final SpellAbility a, final SpellAbility b) {
-            // TODO ideally we could reuse the value from the previous pass with false
-            return ComputerUtilAbility.saEvaluator.compareEvaluator(a, b, true);
-        }
+    public static final Comparator<Card> EvaluateCreatureComparator = (a, b) -> evaluateCreature(b) - evaluateCreature(a);
+    public static final Comparator<SpellAbility> EvaluateCreatureSpellComparator = (a, b) -> {
+        // TODO ideally we could reuse the value from the previous pass with false
+        return ComputerUtilAbility.saEvaluator.compareEvaluator(a, b, true);
     };
 
     private static final CreatureEvaluator creatureEvaluator = new CreatureEvaluator();
@@ -767,7 +749,7 @@ public class ComputerUtilCard {
             // Add all cost of all auras with the same controller
             if (card.isEnchanted()) {
                 final List<Card> auras = CardLists.filterControlledBy(card.getEnchantedBy(), card.getController());
-                curCMC += Aggregates.sum(auras, CardPredicates.Accessors.fnGetCmc) + auras.size();
+                curCMC += Aggregates.sum(auras, Card::getCMC) + auras.size();
             }
 
             if (curCMC >= bigCMC) {
@@ -883,7 +865,7 @@ public class ComputerUtilCard {
                     }
                 }
                 // special rule for Fabricate and Servo
-                if (c.hasStartOfKeyword(Keyword.FABRICATE.toString())) {
+                if (c.hasKeyword(Keyword.FABRICATE)) {
                     Integer count = typesInDeck.getOrDefault("Servo", 0);
                     typesInDeck.put("Servo", count + weight);
                 }
@@ -976,19 +958,14 @@ public class ComputerUtilCard {
 
         for (final Card crd : list) {
             ColorSet color = crd.getColor();
-            if (color.hasWhite()) map.get(0).setValue(Integer.valueOf(map.get(0).getValue() + 1));
-            if (color.hasBlue()) map.get(1).setValue(Integer.valueOf(map.get(1).getValue() + 1));
-            if (color.hasBlack()) map.get(2).setValue(Integer.valueOf(map.get(2).getValue() + 1));
-            if (color.hasRed()) map.get(3).setValue(Integer.valueOf(map.get(3).getValue() + 1));
-            if (color.hasGreen()) map.get(4).setValue(Integer.valueOf(map.get(4).getValue() + 1));
+            if (color.hasWhite()) map.get(0).setValue(map.get(0).getValue() + 1);
+            if (color.hasBlue()) map.get(1).setValue(map.get(1).getValue() + 1);
+            if (color.hasBlack()) map.get(2).setValue(map.get(2).getValue() + 1);
+            if (color.hasRed()) map.get(3).setValue(map.get(3).getValue() + 1);
+            if (color.hasGreen()) map.get(4).setValue(map.get(4).getValue() + 1);
         }
 
-        Collections.sort(map, new Comparator<Pair<Byte, Integer>>() {
-            @Override
-            public int compare(Pair<Byte, Integer> o1, Pair<Byte, Integer> o2) {
-                return o2.getValue() - o1.getValue();
-            }
-        });
+        map.sort(Comparator.<Pair<Byte, Integer>>comparingInt(Pair::getValue).reversed());
 
         // will this part be once dropped?
         List<String> result = new ArrayList<>(cntColors);
@@ -999,17 +976,14 @@ public class ComputerUtilCard {
         return result;
     }
 
-    public static final Predicate<Deck> AI_KNOWS_HOW_TO_PLAY_ALL_CARDS = new Predicate<Deck>() {
-        @Override
-        public boolean apply(Deck d) {
-            for (Entry<DeckSection, CardPool> cp : d) {
-                for (Entry<PaperCard, Integer> e : cp.getValue()) {
-                    if (e.getKey().getRules().getAiHints().getRemAIDecks())
-                        return false;
-                }
+    public static final Predicate<Deck> AI_KNOWS_HOW_TO_PLAY_ALL_CARDS = d -> {
+        for (Entry<DeckSection, CardPool> cp : d) {
+            for (Entry<PaperCard, Integer> e : cp.getValue()) {
+                if (e.getKey().getRules().getAiHints().getRemAIDecks())
+                    return false;
             }
-            return true;
         }
+        return true;
     };
 
     public static List<String> chooseColor(SpellAbility sa, int min, int max, List<String> colorChoices) {
@@ -1369,6 +1343,10 @@ public class ComputerUtilCard {
         }
 
         if (c.getNetToughness() + toughness <= 0) {
+            return false;
+        }
+
+        if (sa.getHostCard().equals(c) && ComputerUtilCost.isSacrificeSelfCost(sa.getPayCosts())) {
             return false;
         }
 
@@ -1743,7 +1721,7 @@ public class ComputerUtilCard {
      */
     public static Card getPumpedCreature(final Player ai, final SpellAbility sa,
                                          final Card c, int toughness, int power, final List<String> keywords) {
-        Card pumped = CardFactory.copyCard(c, false);
+        Card pumped = new CardCopyService(c).copyCard(false);
         pumped.setSickness(c.hasSickness());
         final long timestamp = c.getGame().getNextTimestamp();
         final List<String> kws = Lists.newArrayList();
@@ -1781,7 +1759,7 @@ public class ComputerUtilCard {
         pumped.addPTBoost(power + berserkPower, toughness, timestamp, 0);
 
         if (!kws.isEmpty()) {
-            pumped.addChangedCardKeywords(kws, null, false, timestamp, 0, false);
+            pumped.addChangedCardKeywords(kws, null, false, timestamp, null, false);
         }
         if (!hiddenKws.isEmpty()) {
             pumped.addHiddenExtrinsicKeywords(timestamp, 0, hiddenKws);
@@ -1802,7 +1780,7 @@ public class ComputerUtilCard {
             }
         }
         final long timestamp2 = c.getGame().getNextTimestamp(); //is this necessary or can the timestamp be re-used?
-        pumped.addChangedCardKeywordsInternal(toCopy, null, false, timestamp2, 0, false);
+        pumped.addChangedCardKeywordsInternal(toCopy, null, false, timestamp2, null, false);
         pumped.updateKeywordsCache(pumped.getCurrentState());
         applyStaticContPT(ai.getGame(), pumped, new CardCollection(c));
         return pumped;
@@ -1828,7 +1806,7 @@ public class ComputerUtilCard {
         for (final Card c : list) {
             // remove old boost that might be copied
             for (final StaticAbility stAb : c.getStaticAbilities()) {
-                vCard.removePTBoost(c.getTimestamp(), stAb.getId());
+                vCard.removePTBoost(c.getLayerTimestamp(), stAb.getId());
                 if (!stAb.checkMode("Continuous")) {
                     continue;
                 }
@@ -1851,7 +1829,7 @@ public class ComputerUtilCard {
                     String addT = stAb.getParam("AddToughness");
                     def = AbilityUtils.calculateAmount(addT.contains("Affected") ? vCard : c, addT, stAb, true);
                 }
-                vCard.addPTBoost(att, def, c.getTimestamp(), stAb.getId());
+                vCard.addPTBoost(att, def, c.getLayerTimestamp(), stAb.getId());
             }
         }
     }
@@ -2114,6 +2092,7 @@ public class ComputerUtilCard {
             for (Card card2 : card.getEnchantedBy()) {
                 if (card2.getOwner() != ai) {
                     disabledByEnemy = true;
+                    break;
                 }
             }
             if (!disabledByEnemy) {

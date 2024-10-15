@@ -17,16 +17,12 @@
  */
 package forge.game.combat;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import forge.card.CardType;
-import forge.card.MagicColor;
 import forge.card.mana.ManaCost;
 import forge.game.Game;
 import forge.game.GameEntity;
-import forge.game.GlobalRuleChange;
 import forge.game.ability.AbilityKey;
 import forge.game.card.*;
 import forge.game.cost.Cost;
@@ -38,6 +34,7 @@ import forge.game.player.Player;
 import forge.game.player.PlayerController.ManaPaymentPurpose;
 import forge.game.spellability.SpellAbility;
 import forge.game.staticability.StaticAbility;
+import forge.game.staticability.StaticAbilityBlockRestrict;
 import forge.game.staticability.StaticAbilityCantAttackBlock;
 import forge.game.staticability.StaticAbilityMustBlock;
 import forge.game.trigger.TriggerType;
@@ -94,7 +91,7 @@ public class CombatUtil {
             return false;
         }
         final Pair<Map<Card, GameEntity>, Integer> bestAttack = constraints.getLegalAttackers();
-        return myViolations <= bestAttack.getRight().intValue();
+        return myViolations <= bestAttack.getRight();
     }
 
     /**
@@ -113,19 +110,16 @@ public class CombatUtil {
         final Map<Card, GameEntity> attackers = new HashMap<>(combat.getAttackersAndDefenders());
         final Game game = attacker.getGame();
 
-        return Iterables.any(getAllPossibleDefenders(attacker.getController()), new Predicate<GameEntity>() {
-            @Override
-            public boolean apply(final GameEntity defender) {
-                if (!canAttack(attacker, defender) || getAttackCost(game, attacker, defender) != null) {
-                    return false;
-                }
-                attackers.put(attacker, defender);
-                final int myViolations = constraints.countViolations(attackers);
-                if (myViolations == -1) {
-                    return false;
-                }
-                return myViolations <= bestAttack.getRight().intValue();
+        return Iterables.any(getAllPossibleDefenders(attacker.getController()), defender -> {
+            if (!canAttack(attacker, defender) || getAttackCost(game, attacker, defender) != null) {
+                return false;
             }
+            attackers.put(attacker, defender);
+            final int myViolations = constraints.countViolations(attackers);
+            if (myViolations == -1) {
+                return false;
+            }
+            return myViolations <= bestAttack.getRight();
         });
     }
 
@@ -156,12 +150,7 @@ public class CombatUtil {
      * @return a {@link CardCollection}.
      */
     public static CardCollection getPossibleAttackers(final Player p) {
-        return CardLists.filter(p.getCreaturesInPlay(), new Predicate<Card>() {
-            @Override
-            public boolean apply(final Card attacker) {
-                return canAttack(attacker);
-            }
-        });
+        return CardLists.filter(p.getCreaturesInPlay(), CombatUtil::canAttack);
     }
 
     /**
@@ -172,12 +161,7 @@ public class CombatUtil {
      * @see #canAttack(Card, GameEntity)
      */
     public static boolean canAttack(final Card attacker) {
-        return Iterables.any(getAllPossibleDefenders(attacker.getController()), new Predicate<GameEntity>() {
-            @Override
-            public boolean apply(final GameEntity defender) {
-                return canAttack(attacker, defender);
-            }
-        });
+        return Iterables.any(getAllPossibleDefenders(attacker.getController()), defender -> canAttack(attacker, defender));
     }
 
     /**
@@ -288,6 +272,10 @@ public class CombatUtil {
         // If there's a better way of handling this somewhere deeper in the code, feel free to remove
         final SpellAbility fakeSA = new SpellAbility.EmptySa(attacker, attacker.getController());
         fakeSA.setCardState(attacker.getCurrentState());
+        // need to set this for "CostContainsX" restriction
+        fakeSA.setPayCosts(attackCost);
+        // prevent recalculating X
+        fakeSA.setSVar("X", "0");
         return attacker.getController().getController().payManaOptional(attacker, attackCost, fakeSA,
                 "Pay additional cost to declare " + attacker + " an attacker", ManaPaymentPurpose.DeclareAttacker);
     }
@@ -349,6 +337,8 @@ public class CombatUtil {
 
         SpellAbility fakeSA = new SpellAbility.EmptySa(blocker, blocker.getController());
         fakeSA.setCardState(blocker.getCurrentState());
+        fakeSA.setPayCosts(blockCost);
+        fakeSA.setSVar("X", "0");
         return blocker.getController().getController().payManaOptional(blocker, blockCost, fakeSA, "Pay cost to declare " + blocker + " a blocker. ", ManaPaymentPurpose.DeclareBlocker);
     }
 
@@ -407,7 +397,7 @@ public class CombatUtil {
 
         c.getDamageHistory().setCreatureAttackedThisCombat(defender, otherAttackers.size());
         c.getDamageHistory().clearNotAttackedSinceLastUpkeepOf();
-        c.getController().addCreaturesAttackedThisTurn(CardUtil.getLKICopy(c), defender);
+        c.getController().addCreaturesAttackedThisTurn(CardCopyService.getLKICopy(c), defender);
     }
 
     /**
@@ -453,21 +443,11 @@ public class CombatUtil {
         if (!canBlockMoreCreatures(blocker, combat.getAttackersBlockedBy(blocker))) {
             return false;
         }
-        final Game game = blocker.getGame();
-        final int blockers = combat.getAllBlockers().size();
-
-        if (blockers > 1 && game.getStaticEffects().getGlobalRuleChange(GlobalRuleChange.onlyTwoBlockers)) {
-            return false;
-        }
-
-        if (blockers > 0 && game.getStaticEffects().getGlobalRuleChange(GlobalRuleChange.onlyOneBlocker)) {
-            return false;
-        }
 
         CardCollection allOtherBlockers = combat.getAllBlockers();
         allOtherBlockers.remove(blocker);
         final int blockersFromOnePlayer = CardLists.count(allOtherBlockers, CardPredicates.isController(blocker.getController()));
-        if (blockersFromOnePlayer > 0 && game.getStaticEffects().getGlobalRuleChange(GlobalRuleChange.onlyOneBlockerPerOpponent)) {
+        if (blockersFromOnePlayer >= StaticAbilityBlockRestrict.blockRestrictNum(blocker.getController())) {
             return false;
         }
 
@@ -560,115 +540,7 @@ public class CombatUtil {
             return false;
         }
 
-        return canBeBlocked(attacker, defendingPlayer);
-    }
-
-    /**
-     * <p>
-     * canBeBlocked.
-     * </p>
-     *
-     * @param attacker
-     *            a {@link forge.game.card.Card} object.
-     * @return a boolean.
-     */
-    public static boolean canBeBlocked(final Card attacker, final Player defender) {
-        if (attacker == null) {
-            return true;
-        }
-
-        // Landwalk
-        if (isUnblockableFromLandwalk(attacker, defender)) {
-            return CardLists.getAmountOfKeyword(defender.getCreaturesInPlay(), "CARDNAME can block creatures with landwalk abilities as though they didn't have those abilities.") != 0;
-        }
-
         return true;
-    }
-
-    // Cache landwalk ability strings instead of generating them each time.
-    private static final String[] LANDWALK_KEYWORDS;
-    private static final String[] SNOW_LANDWALK_KEYWORDS;
-    private static final String[] IGNORE_LANDWALK_KEYWORDS;
-    static {
-        final int size = MagicColor.Constant.BASIC_LANDS.size();
-        LANDWALK_KEYWORDS = new String[size];
-        SNOW_LANDWALK_KEYWORDS = new String[size];
-        IGNORE_LANDWALK_KEYWORDS = new String[size];
-        for (int i = 0; i < size; i++) {
-            final String basic = MagicColor.Constant.BASIC_LANDS.get(i);
-            final String landwalk = basic + "walk";
-            LANDWALK_KEYWORDS[i] = landwalk;
-            SNOW_LANDWALK_KEYWORDS[i] = "Snow " + landwalk.toLowerCase();
-            IGNORE_LANDWALK_KEYWORDS[i] = "May be blocked as though it doesn't have " + landwalk + ".";
-        }
-    }
-
-    public static boolean isUnblockableFromLandwalk(final Card attacker, final Player defendingPlayer) {
-        //May be blocked as though it doesn't have landwalk. (Staff of the Ages)
-        if (attacker.hasKeyword("May be blocked as though it doesn't have landwalk.")) {
-            return false;
-        }
-
-        List<String> walkTypes = Lists.newArrayList();
-
-        // handle basic landwalk and snow basic landwalk
-        for (int i = 0; i < LANDWALK_KEYWORDS.length; i++) {
-            final String basic = MagicColor.Constant.BASIC_LANDS.get(i);
-            final String landwalk = LANDWALK_KEYWORDS[i];
-            final String snowwalk = SNOW_LANDWALK_KEYWORDS[i];
-            final String mayBeBlocked = IGNORE_LANDWALK_KEYWORDS[i];
-
-            if (attacker.hasKeyword(landwalk) && !attacker.hasKeyword(mayBeBlocked)) {
-                walkTypes.add(basic);
-            }
-
-            if (attacker.hasKeyword(snowwalk)) {
-                walkTypes.add(basic + ".Snow");
-            }
-        }
-
-        for (final KeywordInterface inst : attacker.getKeywords(Keyword.LANDWALK)) {
-            String keyword = inst.getOriginal();
-            if (keyword.equals("Legendary landwalk")) {
-                walkTypes.add("Land.Legendary");
-            } else if (keyword.equals("Nonbasic landwalk")) {
-                walkTypes.add("Land.nonBasic");
-            } else if (keyword.equals("Artifact landwalk")) {
-                walkTypes.add("Land.Artifact");
-            } else if (keyword.equals("Snow landwalk")) {
-                walkTypes.add("Land.Snow");
-            } else if (keyword.endsWith("walk")) {
-                String landtype = TextUtil.fastReplace(keyword, "walk", "");
-                String valid = landtype;
-
-                // substract Snow type
-                if (landtype.startsWith("Snow ")) {
-                    landtype = landtype.substring(5);
-                    valid = landtype + ".Snow";
-                }
-
-                // basic land types are handled before
-                if (CardType.isALandType(landtype) && !CardType.isABasicLandType(landtype)) {
-                    if (!walkTypes.contains(landtype)) {
-                        walkTypes.add(valid);
-                    }
-                }
-            }
-        }
-
-        if (walkTypes.isEmpty()) {
-            return false;
-        }
-
-        final String[] valid = walkTypes.toArray(new String[0]);
-        final CardCollectionView defendingLands = defendingPlayer.getCardsIn(ZoneType.Battlefield);
-        for (final Card c : defendingLands) {
-            if (c.isValid(valid, defendingPlayer, attacker, null)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -701,7 +573,7 @@ public class CombatUtil {
     public static boolean canBeBlocked(final Card attacker, final List<Card> blockers, final Combat combat) {
         int blocks = 0;
         for (final Card blocker : blockers) {
-            if (canBeBlocked(attacker, blocker.getController()) && canBlock(attacker, blocker)) {
+            if (canBlock(attacker, blocker)) {
                 blocks++;
             }
         }
@@ -716,7 +588,7 @@ public class CombatUtil {
         }
 
         for (final Card blocker : blockers) {
-            if (canBeBlocked(attacker, blocker.getController()) && canBlock(attacker, blocker)) {
+            if (canBlock(attacker, blocker)) {
                 potentialBlockers.add(blocker);
             }
         }
@@ -1124,11 +996,6 @@ public class CombatUtil {
         }
 
         if (!canBlock(blocker, nextTurn)) {
-            return false;
-        }
-
-        if (isUnblockableFromLandwalk(attacker, blocker.getController())
-        		&& !blocker.hasKeyword("CARDNAME can block creatures with landwalk abilities as though they didn't have those abilities.")) {
             return false;
         }
 

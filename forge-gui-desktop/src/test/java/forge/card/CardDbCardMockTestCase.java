@@ -1889,7 +1889,7 @@ public class CardDbCardMockTestCase extends CardMockTestCase {
         PaperCard landCard = this.cardDb.getCard(snowCoveredLand);
         assertNotNull(landCard);
         assertEquals(landCard.getName(), snowCoveredLand);
-        assertEquals(landCard.getEdition(), "J22");
+        assertEquals(landCard.getEdition(), "MB2");
 
         this.cardDb.setCardArtPreference(true, true);
         assertEquals(this.cardDb.getCardArtPreference(),
@@ -1958,11 +1958,12 @@ public class CardDbCardMockTestCase extends CardMockTestCase {
             assertEquals(loyalUnicorn, legacyLoyalUnicorn);
 
         // Selfless Squire: Available in Forge in COMMANDER 2021; Treasure Chest;
-        // COMMANDER 2016; The Lord of the Rings: Tales of Middle-earth Commander
+        // COMMANDER 2016; The Lord of the Rings: Tales of Middle-earth Commander;
+        // Murders at Karlov Manor Commander
         String cnSelflessSquire = "Selfless Squire";
         PaperCard selflessSquire = this.cardDb.getCard(cnSelflessSquire);
         assertNotNull(selflessSquire);
-        assertEquals(selflessSquire.getEdition(), "LTC"); // The Lord of the Rings: Tales of Middle-earth Commander
+        assertEquals(selflessSquire.getEdition(), "MKC"); // Murders at Karlov Manor Commander
 
         PaperCard legacySelflessSquire = this.legacyCardDb.getCardFromEdition(cnSelflessSquire,
                 LegacyCardDb.LegacySetPreference.Latest);
@@ -2003,10 +2004,11 @@ public class CardDbCardMockTestCase extends CardMockTestCase {
             assertEquals(loyalUnicorn, legacyLoyalUnicorn);
 
         // Selfless Squire: Available in Forge in COMMANDER 2021; Treasure Chest;
-        // COMMANDER 2016; The Lord of the Rings: Tales of Middle-earth Commander
+        // COMMANDER 2016; The Lord of the Rings: Tales of Middle-earth Commander;
+        // Murders at Karlov Manor Commander
         selflessSquire = this.cardDb.getCard(cnSelflessSquire);
         assertNotNull(selflessSquire);
-        assertEquals(selflessSquire.getEdition(), "LTC");
+        assertEquals(selflessSquire.getEdition(), "MKC");
 
         legacySelflessSquire = this.legacyCardDb.getCardFromEdition(cnSelflessSquire,
                 LegacyCardDb.LegacySetPreference.LatestCoreExp);
@@ -2027,7 +2029,7 @@ public class CardDbCardMockTestCase extends CardMockTestCase {
 
         militantAngel = this.cardDb.getCard(cnMilitantAngel);
         assertNotNull(militantAngel);
-        assertEquals(militantAngel.getEdition(), "GNT");
+        assertEquals(militantAngel.getEdition(), "PZ2");
 
         legacyMilitantAngel = this.legacyCardDb.getCardFromEdition(cnMilitantAngel,
                 LegacyCardDb.LegacySetPreference.Earliest);
@@ -2037,7 +2039,7 @@ public class CardDbCardMockTestCase extends CardMockTestCase {
         // Loyal Unicorn: Available in Forge in The List and COMMANDER 2018
         loyalUnicorn = this.cardDb.getCard(cnLoyalUnicorn);
         assertNotNull(loyalUnicorn);
-        assertEquals(loyalUnicorn.getEdition(), "C18");
+        assertEquals(loyalUnicorn.getEdition(), "PZ2");
 
         legacyLoyalUnicorn = this.legacyCardDb.getCardFromEdition(cnLoyalUnicorn,
                 LegacyCardDb.LegacySetPreference.Earliest);
@@ -2070,7 +2072,7 @@ public class CardDbCardMockTestCase extends CardMockTestCase {
 
         militantAngel = this.cardDb.getCard(cnMilitantAngel);
         assertNotNull(militantAngel);
-        assertEquals(militantAngel.getEdition(), "GNT");
+        assertEquals(militantAngel.getEdition(), "PZ2");
 
         legacyMilitantAngel = this.legacyCardDb.getCardFromEdition(cnMilitantAngel,
                 LegacyCardDb.LegacySetPreference.EarliestCoreExp);

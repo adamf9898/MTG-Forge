@@ -14,12 +14,14 @@ import forge.game.Game;
 import forge.game.GameEntityCounterTable;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.ApiType;
+import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardDamageMap;
 import forge.game.card.CardState;
 import forge.game.card.CardZoneTable;
 import forge.game.cost.Cost;
+import forge.game.keyword.Keyword;
 import forge.game.player.Player;
 import forge.game.spellability.Ability;
 import forge.game.spellability.AbilitySub;
@@ -66,15 +68,16 @@ public class WrappedAbility extends Ability {
             ApiType.SacrificeAll,
             ApiType.Pump,
 
+            ApiType.DealDamage, // checked
+
             ApiType.Regenerate, // Updated
-            ApiType.RegenerateAll, // No Triggered
             ApiType.Regeneration, // Replacement Effect only
 
             ApiType.DelayedTrigger
             );
 
     private final SpellAbility sa;
-    private final Player decider;
+    private Player decider;
 
     boolean mandatory = false;
 
@@ -286,8 +289,8 @@ public class WrappedAbility extends Ability {
     }
 
     @Override
-    public boolean isBuyBackAbility() {
-        return sa.isBuyBackAbility();
+    public boolean isBuyback() {
+        return sa.isBuyback();
     }
 
     @Override
@@ -306,22 +309,8 @@ public class WrappedAbility extends Ability {
     }
 
     @Override
-    public void setChapter(int val) {
-        sa.setChapter(val);
-    }
-
-    @Override
-    public boolean isLastChapter() {
-        return sa.isLastChapter();
-    }
-    @Override
-    public boolean setLastChapter(boolean value) {
-        return sa.setLastChapter(value);
-    }
-
-    @Override
-    public boolean isFlashBackAbility() {
-        return sa.isFlashBackAbility();
+    public boolean isFlashback() {
+        return sa.isFlashback();
     }
 
     @Override
@@ -370,15 +359,6 @@ public class WrappedAbility extends Ability {
     @Override
     public void setDescription(final String s) {
         sa.setDescription(s);
-    }
-
-    @Override
-    public ManaCost getMultiKickerManaCost() {
-        return sa.getMultiKickerManaCost();
-    }
-    @Override
-    public void setMultiKickerManaCost(final ManaCost cost) {
-        sa.setMultiKickerManaCost(cost);
     }
 
     @Override
@@ -465,7 +445,7 @@ public class WrappedAbility extends Ability {
     // //////////////////////////////////////
     @Override
     public void resolve() {
-        final Game game = sa.getActivatingPlayer().getGame();
+        final Game game = getActivatingPlayer().getGame();
         final Trigger regtrig = getTrigger();
 
         if (!(TriggerType.Always.equals(regtrig.getMode())) && !regtrig.hasParam("NoResolvingCheck")) {
@@ -480,6 +460,10 @@ public class WrappedAbility extends Ability {
             }
         }
 
+        if (!regtrig.checkResolvedLimit(getActivatingPlayer())) {
+            return;
+        }
+
         if (regtrig.hasParam("ResolvingCheck")) {
             // rare cases: Hidden Predators (state trigger, but have "Intervening If" to check IsPresent2) etc.
             Map<String, String> recheck = Maps.newHashMap();
@@ -490,13 +474,16 @@ public class WrappedAbility extends Ability {
             }
         }
 
-        if (decider != null && !decider.getController().confirmTrigger(this)) {
-            return;
+        if (decider != null) {
+            if (!decider.isInGame()) {
+                decider = SpellAbilityEffect.getNewChooser(sa, getActivatingPlayer(), decider);
+            }
+            if (!decider.getController().confirmTrigger(this)) {
+                return;
+            }
         }
 
-        if (!regtrig.hasParam("NoTimestampCheck")) {
-            timestampCheck();
-        }
+        timestampCheck();
 
         getActivatingPlayer().getController().playSpellAbilityNoStack(sa, false);
     }
@@ -516,7 +503,7 @@ public class WrappedAbility extends Ability {
             if (ev.getValue() instanceof Card) {
                 Card card = (Card) ev.getValue();
                 Card current = game.getCardState(card);
-                if (card.isInPlay() && current.isInPlay() && current.getTimestamp() != card.getTimestamp()) {
+                if (card.isInPlay() && current.isInPlay() && !current.equalsWithGameTimestamp(card)) {
                     // TODO: figure out if NoTimestampCheck should be the default for ChangesZone triggers
                     sa.getTriggeringObjects().remove(ev.getKey());
                 }
@@ -593,5 +580,9 @@ public class WrappedAbility extends Ability {
 
     public boolean isIntrinsic() {
         return sa.isIntrinsic();
+    }
+
+    public boolean isKeyword(Keyword kw) {
+        return sa.isKeyword(kw);
     }
 }

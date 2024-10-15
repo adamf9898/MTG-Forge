@@ -27,13 +27,16 @@ import forge.game.ability.ApiType;
 import forge.game.ability.effects.CharmEffect;
 import forge.game.card.Card;
 import forge.game.card.CardState;
+import forge.game.cost.IndividualCostPaymentInstance;
+import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
-import forge.game.spellability.OptionalCost;
 import forge.game.spellability.SpellAbility;
+import forge.game.zone.CostPaymentStack;
 import forge.game.zone.ZoneType;
 import forge.util.CardTranslation;
+import forge.util.ITranslatable;
 import forge.util.Lang;
 import forge.util.TextUtil;
 
@@ -117,17 +120,16 @@ public abstract class Trigger extends TriggerReplacementBase {
     public String toString(boolean active) {
         if (hasParam("TriggerDescription") && !this.isSuppressed()) {
             StringBuilder sb = new StringBuilder();
-            String currentName;
-            if (this.isIntrinsic() && cardState != null && cardState.getCard() == getHostCard()) {
-                currentName = cardState.getName();
-            } else {
-                currentName = getHostCard().getName();
-            }
+            ITranslatable nameSource = getHostName(this);
             String desc = getParam("TriggerDescription");
             if (!desc.contains("ABILITY")) {
-                desc = CardTranslation.translateSingleDescriptionText(getParam("TriggerDescription"), currentName);
-                desc = TextUtil.fastReplace(desc,"CARDNAME", CardTranslation.getTranslatedName(currentName));
-                desc = TextUtil.fastReplace(desc,"NICKNAME", Lang.getInstance().getNickName(CardTranslation.getTranslatedName(currentName)));
+                desc = CardTranslation.translateSingleDescriptionText(getParam("TriggerDescription"), nameSource);
+                String translatedName = CardTranslation.getTranslatedName(nameSource);
+                desc = TextUtil.fastReplace(desc,"CARDNAME", translatedName);
+                desc = TextUtil.fastReplace(desc,"NICKNAME", Lang.getInstance().getNickName(translatedName));
+                if (desc.contains("ORIGINALHOST") && this.getOriginalHost() != null) {
+                    desc = TextUtil.fastReplace(desc, "ORIGINALHOST", this.getOriginalHost().getName());
+                }
             }
             if (getHostCard().getEffectSource() != null) {
                 if (active)
@@ -197,7 +199,7 @@ public abstract class Trigger extends TriggerReplacementBase {
                     }
                 }
             }
-            if (saDesc.equals("")) { // in case we haven't found anything better
+            if (saDesc.isEmpty()) { // in case we haven't found anything better
                 saDesc = sa.toString();
             }
             // string might have leading whitespace
@@ -215,10 +217,10 @@ public abstract class Trigger extends TriggerReplacementBase {
             }
             result = TextUtil.fastReplace(result, "ABILITY", saDesc);
 
-            String currentName = sa.getHostCard().getName();
-            result = CardTranslation.translateMultipleDescriptionText(result, currentName);
-            result = TextUtil.fastReplace(result,"CARDNAME", CardTranslation.getTranslatedName(currentName));
-            result = TextUtil.fastReplace(result,"NICKNAME", Lang.getInstance().getNickName(CardTranslation.getTranslatedName(currentName)));
+            result = CardTranslation.translateMultipleDescriptionText(result, sa.getHostCard());
+            String translatedName = CardTranslation.getTranslatedName(sa.getHostCard());
+            result = TextUtil.fastReplace(result,"CARDNAME", translatedName);
+            result = TextUtil.fastReplace(result,"NICKNAME", Lang.getInstance().getNickName(translatedName));
         }
 
         return result;
@@ -237,10 +239,8 @@ public abstract class Trigger extends TriggerReplacementBase {
             if (!validPhases.contains(phaseHandler.getPhase())) {
                 return false;
             }
-        }
-
-        if (hasParam("PreCombatMain")) {
-            if (!phaseHandler.isPreCombatMain()) {
+            // add support for calculation if needed
+            if (hasParam("PhaseCount") && phaseHandler.getNumMain() + 1 != 2) {
                 return false;
             }
         }
@@ -339,29 +339,48 @@ public abstract class Trigger extends TriggerReplacementBase {
             }
         }
 
-        if (hasParam("ResolvedLimit")) {
-            if (this.getOverridingAbility().getResolvedThisTurn() >= Integer.parseInt(getParam("ResolvedLimit"))) {
-                return false;
-            }
-        }
-
         // host controller will be null when adding card in a simulation game
         if (this.getHostCard().getController() == null || (game.getAge() != GameStage.Play && game.getAge() != GameStage.RestartedByKarn) || !meetsCommonRequirements(this.mapParams)) {
+            return false;
+        }
+
+        if (!checkResolvedLimit(getHostCard().getController())) {
             return false;
         }
 
         return true;
     }
 
+    public boolean checkResolvedLimit(Player activator) {
+        // CR 603.2i
+        if (hasParam("ResolvedLimit")) {
+            if (Collections.frequency(getHostCard().getAbilityResolvedThisTurnActivators(getOverridingAbility()), activator)
+                    >= Integer.parseInt(getParam("ResolvedLimit"))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean checkActivationLimit() {
+        if (hasParam("ActivationLimit") &&
+                getActivationsThisTurn() >= Integer.parseInt(getParam("ActivationLimit"))) {
+            return false;
+        }
+        if (hasParam("GameActivationLimit") && 
+            getActivationsThisGame() >= Integer.parseInt(getParam("GameActivationLimit"))) {
+                return false;
+        }
+        return true;
+    }
+
     public boolean meetsRequirementsOnTriggeredObjects(Game game, final Map<AbilityKey, Object> runParams) {
-        if ("True".equals(getParam("EvolveCondition"))) {
+        String condition = getParam("Condition");
+
+        if (isKeyword(Keyword.EVOLVE) || "Evolve".equals(condition)) {
             final Card moved = (Card) runParams.get(AbilityKey.Card);
             if (moved == null) {
                 return false;
-                // final StringBuilder sb = new StringBuilder();
-                // sb.append("Trigger::requirementsCheck() - EvolveCondition condition being checked without a moved card. ");
-                // sb.append(this.getHostCard().getName());
-                // throw new RuntimeException(sb.toString());
             }
             // CR 702.100c
             if (!moved.isCreature() || !this.getHostCard().isCreature()) {
@@ -373,12 +392,7 @@ public abstract class Trigger extends TriggerReplacementBase {
             }
         }
 
-        String condition = getParam("Condition");
-        if ("AltCost".equals(condition)) {
-            final Card moved = (Card) runParams.get(AbilityKey.Card);
-            if (null != moved && !moved.isOptionalCostPaid(OptionalCost.AltCost))
-                return false;
-        } else if ("LifePaid".equals(condition)) {
+        if ("LifePaid".equals(condition)) {
             final SpellAbility trigSA = (SpellAbility) runParams.get(AbilityKey.SpellAbility);
             if (trigSA != null && trigSA.getAmountLifePaid() <= 0) {
                 return false;
@@ -421,6 +435,11 @@ public abstract class Trigger extends TriggerReplacementBase {
             }
             if (attacked == null || !attacked.isValid("Player.withMostLife",
                     this.getHostCard().getController(), this.getHostCard(), null)) {
+                return false;
+            }
+        } else if ("AttackerHasUnattackedOpp".equals(condition)) {
+            Player attacker = (Player) runParams.get(AbilityKey.AttackingPlayer);
+            if (game.getCombat().getAttackersAndDefenders().values().containsAll(attacker.getOpponents())) {
                 return false;
             }
         }
@@ -554,6 +573,10 @@ public abstract class Trigger extends TriggerReplacementBase {
         return hostCard.getAbilityActivatedThisTurn(this.getOverridingAbility());
     }
 
+    public int getActivationsThisGame() {
+        return hostCard.getAbilityActivatedThisGame(this.getOverridingAbility());
+    }
+
     public void triggerRun() {
         if (this.getOverridingAbility() != null) {
             hostCard.addAbilityActivated(this.getOverridingAbility());
@@ -567,41 +590,6 @@ public abstract class Trigger extends TriggerReplacementBase {
             return super.clone();
         } catch (final Exception ex) {
             throw new RuntimeException("Trigger : clone() error, " + ex);
-        }
-    }
-
-
-    /* (non-Javadoc)
-     * @see forge.game.CardTraitBase#changeText()
-     */
-    @Override
-    public void changeText() {
-        if (!isIntrinsic()) {
-            return;
-        }
-        super.changeText();
-
-        SpellAbility sa = ensureAbility();
-
-        if (sa != null) {
-            sa.changeText();
-        }
-    }
-
-    /* (non-Javadoc)
-     * @see forge.game.CardTraitBase#changeTextIntrinsic(java.util.Map, java.util.Map)
-     */
-    @Override
-    public void changeTextIntrinsic(Map<String, String> colorMap, Map<String, String> typeMap) {
-        if (!isIntrinsic()) {
-            return;
-        }
-        super.changeTextIntrinsic(colorMap, typeMap);
-
-        SpellAbility sa = ensureAbility();
-
-        if (sa != null) {
-            sa.changeTextIntrinsic(colorMap, typeMap);
         }
     }
 
@@ -622,5 +610,31 @@ public abstract class Trigger extends TriggerReplacementBase {
     public void setOverridingAbility(SpellAbility overridingAbility0) {
         super.setOverridingAbility(overridingAbility0);
         overridingAbility0.setTrigger(this);
+    }
+
+    boolean whileKeywordCheck(final String param, final Map<AbilityKey, Object> runParams) {
+        IndividualCostPaymentInstance currentPayment = (IndividualCostPaymentInstance) runParams.get(AbilityKey.IndividualCostPaymentInstance);
+        if (currentPayment != null) {
+            if (matchesValidParam(param, currentPayment.getPayment().getAbility())) return true;
+        }
+
+        CostPaymentStack stack = (CostPaymentStack) runParams.get(AbilityKey.CostStack);
+        for (IndividualCostPaymentInstance individual : stack) {
+            if (matchesValidParam(param, individual.getPayment().getAbility())) return true;
+        }
+
+        return false;
+    }
+
+    public boolean isChapter() {
+        return hasParam("Chapter");
+    }
+    public Integer getChapter() {
+        if (!isChapter())
+            return null;
+        return Integer.valueOf(getParam("Chapter"));
+    }
+    public boolean isLastChapter() {
+        return isChapter() && getChapter() == getCardState().getFinalChapterNr();
     }
 }

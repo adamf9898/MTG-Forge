@@ -30,7 +30,7 @@ import forge.util.collect.FCollectionView;
 
 public class SubgameEffect extends SpellAbilityEffect {
 
-    private final Game createSubGame(Game maingame, int startingLife) {
+    private Game createSubGame(Game maingame, int startingLife) {
         List<RegisteredPlayer> players = Lists.newArrayList();
 
         // Add remaining players to subgame
@@ -41,7 +41,7 @@ public class SubgameEffect extends SpellAbilityEffect {
         return new Game(players, maingame.getRules(), maingame.getMatch(), maingame, startingLife);
     }
 
-    private final void setCardsInZone(Player player, final ZoneType zoneType, final CardCollectionView oldCards, boolean addMapping) {
+    private void setCardsInZone(Player player, final ZoneType zoneType, final CardCollectionView oldCards, boolean addMapping) {
         PlayerZone zone = player.getZone(zoneType);
         List<Card> newCards = Lists.newArrayList();
         for (final Card card : oldCards) {
@@ -59,7 +59,7 @@ public class SubgameEffect extends SpellAbilityEffect {
         zone.setCards(newCards);
     }
 
-    private final void initVariantsZonesSubgame(final Game subgame, final Player maingamePlayer, final Player player) {
+    private void initVariantsZonesSubgame(final Game subgame, final Player maingamePlayer, final Player player) {
         PlayerZone com = player.getZone(ZoneType.Command);
         RegisteredPlayer registeredPlayer = player.getRegisteredPlayer();
 
@@ -71,7 +71,6 @@ public class SubgameEffect extends SpellAbilityEffect {
         }
 
         // Commander
-        List<Card> commanders = Lists.newArrayList();
         final CardCollectionView commandCards = maingamePlayer.getCardsIn(ZoneType.Command);
         for (final Card card : commandCards) {
             if (card.isCommander()) {
@@ -85,14 +84,9 @@ public class SubgameEffect extends SpellAbilityEffect {
                     cmd.setChosenColors(chosenColors);
                     subgame.getAction().notifyOfValue(cmdColorsa, cmd, Localizer.getInstance().getMessage("lblPlayerPickedChosen", player.getName(), Lang.joinHomogenous(chosenColors)), player);
                 }
-                cmd.setCommander(true);
                 com.add(cmd);
-                commanders.add(cmd);
-                com.add(Player.createCommanderEffect(subgame, cmd));
+                player.addCommander(cmd);
             }
-        }
-        if (!commanders.isEmpty()) {
-            player.setCommanders(commanders);
         }
 
         // Conspiracies
@@ -141,12 +135,16 @@ public class SubgameEffect extends SpellAbilityEffect {
             // Planes
             setCardsInZone(player, ZoneType.PlanarDeck, maingamePlayer.getCardsIn(ZoneType.PlanarDeck), false);
 
+            // Attractions
+            setCardsInZone(player, ZoneType.AttractionDeck, maingamePlayer.getCardsIn(ZoneType.AttractionDeck), false);
+
             // Vanguard and Commanders
             initVariantsZonesSubgame(subgame, maingamePlayer, player);
 
             player.shuffle(null);
             player.getZone(ZoneType.SchemeDeck).shuffle();
             player.getZone(ZoneType.PlanarDeck).shuffle();
+            player.getZone(ZoneType.AttractionDeck).shuffle();
         }
     }
 
@@ -249,6 +247,7 @@ public class SubgameEffect extends SpellAbilityEffect {
             player.shuffle(sa);
             player.getZone(ZoneType.SchemeDeck).shuffle();
             player.getZone(ZoneType.PlanarDeck).shuffle();
+            player.getZone(ZoneType.AttractionDeck).shuffle();
         }
     }
 

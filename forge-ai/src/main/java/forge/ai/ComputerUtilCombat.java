@@ -17,7 +17,6 @@
  */
 package forge.ai;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -79,11 +78,7 @@ public class ComputerUtilCombat {
      */
     public static boolean canAttackNextTurn(final Card attacker) {
         final Iterable<GameEntity> defenders = CombatUtil.getAllPossibleDefenders(attacker.getController());
-        return Iterables.any(defenders, new Predicate<GameEntity>() {
-            @Override public boolean apply(final GameEntity input) {
-                return canAttackNextTurn(attacker, input);
-            }
-        });
+        return Iterables.any(defenders, input -> canAttackNextTurn(attacker, input));
     }
 
     /**
@@ -138,12 +133,7 @@ public class ComputerUtilCombat {
      */
     public static int getTotalFirstStrikeBlockPower(final Card attacker, final Player player) {
         List<Card> list = player.getCreaturesInPlay();
-        list = CardLists.filter(list, new Predicate<Card>() {
-            @Override
-            public boolean apply(final Card c) {
-                return (c.hasFirstStrike() || c.hasDoubleStrike()) && CombatUtil.canBlock(attacker, c);
-            }
-        });
+        list = CardLists.filter(list, c -> (c.hasFirstStrike() || c.hasDoubleStrike()) && CombatUtil.canBlock(attacker, c));
 
         return totalFirstStrikeDamageOfBlockers(attacker, list);
     }
@@ -431,7 +421,7 @@ public class ComputerUtilCombat {
             final List<Card> blockers = combat.getBlockers(attacker);
 
             if (blockers.isEmpty()) {
-                if (!attacker.getSVar("MustBeBlocked").equals("")) {
+                if (!attacker.getSVar("MustBeBlocked").isEmpty()) {
                     boolean cond = false;
                     String condVal = attacker.getSVar("MustBeBlocked");
                     boolean isAttackingPlayer = combat.getDefenderByAttacker(attacker) instanceof Player;
@@ -500,7 +490,7 @@ public class ComputerUtilCombat {
             final List<Card> blockers = combat.getBlockers(attacker);
 
             if (blockers.isEmpty()) {
-                if (!attacker.getSVar("MustBeBlocked").equals("")) {
+                if (!attacker.getSVar("MustBeBlocked").isEmpty()) {
                     return true;
                 }
             }
@@ -734,7 +724,6 @@ public class ComputerUtilCombat {
         return totalDamageOfBlockers(attacker, blockers) >= getDamageToKill(attacker, false);
     }
 
-    // Will this trigger trigger?
     /**
      * <p>
      * combatTriggerWillTrigger.
@@ -1230,6 +1219,13 @@ public class ComputerUtilCombat {
                 continue;
             }
 
+            // Extra check for the Exalted trigger in case we're declaring more than one attacker
+            if (combat != null && trigger.isKeyword(Keyword.EXALTED)) {
+                if (!combat.getAttackers().isEmpty() && !combat.getAttackers().contains(attacker)) {
+                    continue;
+                }
+            }
+
             SpellAbility sa = trigger.ensureAbility();
             if (sa == null) {
                 continue;
@@ -1250,7 +1246,7 @@ public class ComputerUtilCombat {
             sa.setActivatingPlayer(source.getController(), true);
 
             if (sa.hasParam("Cost")) {
-                if (!CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa)) {
+                if (!CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa, true)) {
                     continue;
                 }
             }
@@ -1309,6 +1305,10 @@ public class ComputerUtilCombat {
 
             if (ability.getApi() == ApiType.Pump) {
                 if (!ability.hasParam("NumAtt")) {
+                    continue;
+                }
+
+                if (ComputerUtilCost.isSacrificeSelfCost(ability.getPayCosts())) {
                     continue;
                 }
 
@@ -1447,7 +1447,7 @@ public class ComputerUtilCombat {
                     continue;
                 }
                 if (sa.hasParam("Cost")) {
-                    if (!CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa)) {
+                    if (!CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa, true)) {
                         continue;
                     }
                 }
@@ -1481,7 +1481,7 @@ public class ComputerUtilCombat {
                     continue;
                 }
                 if (sa.hasParam("Cost")) {
-                    if (!CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa)) {
+                    if (!CostPayment.canPayAdditionalCosts(sa.getPayCosts(), sa, true)) {
                         continue;
                     }
                 }
@@ -2320,7 +2320,7 @@ public class ComputerUtilCombat {
         if (original.isTransformable() && !original.isInAlternateState()) {
             for (SpellAbility sa : original.getSpellAbilities()) {
                 if (sa.getApi() == ApiType.SetState && ComputerUtilCost.canPayCost(sa, original.getController(), false)) {
-                    Card transformed = CardUtil.getLKICopy(original);
+                    Card transformed = CardCopyService.getLKICopy(original);
                     transformed.getCurrentState().copyFrom(original.getAlternateState(), true);
                     transformed.updateStateForView();
                     return transformed;
@@ -2556,5 +2556,63 @@ public class ComputerUtilCombat {
             }
         }
         return Iterables.getFirst(defenders, null);
+    }
+
+    public static int checkAttackerLifelinkDamage(Combat combat) {
+        if (combat == null) {
+            return 0;
+        }
+
+        int totalLifeLinkDamage = 0;
+        for (Card attacker : combat.getAttackers()) {
+            int netDamage = attacker.getNetCombatDamage();
+            if ((attacker.hasKeyword(Keyword.LIFELINK) || attacker.hasSVar("LikeLifeLink")) && netDamage > 0) {
+                int damage = ComputerUtilCombat.predictDamageTo(combat.getDefenderByAttacker(attacker), netDamage, attacker, true);
+                boolean prevented = ComputerUtilCombat.isCombatDamagePrevented(attacker, combat.getDefenderByAttacker(attacker), damage);
+                if (!prevented) {
+                    totalLifeLinkDamage += damage;
+                }
+            }
+        }
+        return totalLifeLinkDamage;
+    }
+
+    public static boolean willOpposingCreatureDieInCombat(final Player ai, final Card combatant, final Combat combat) {
+        if (combat != null) {
+            if (combat.isBlocking(combatant)) {
+                for (Card atk : combat.getAttackersBlockedBy(combatant)) {
+                    if (ComputerUtilCombat.combatantWouldBeDestroyed(ai, atk, combat)) {
+                        return true;
+                    }
+                }
+            } else if (combat.isBlocked(combatant)) {
+                for (Card blk : combat.getBlockers(combatant)) {
+                    if (ComputerUtilCombat.combatantWouldBeDestroyed(ai, blk, combat)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    public static boolean isDangerousToSacInCombat(final Player ai, final Card combatant, final Combat combat) {
+        if (combat != null) {
+            if (combat.isBlocking(combatant)) {
+                if (combatant.hasKeyword(Keyword.BANDING)) {
+                    return true;
+                }
+                for (Card atk : combat.getAttackersBlockedBy(combatant)) {
+                    if (atk.hasKeyword(Keyword.TRAMPLE)) {
+                        return true;
+                    }
+                }
+            } else if (combat.isBlocked(combatant)) {
+                if (combatant.hasKeyword(Keyword.BANDING)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

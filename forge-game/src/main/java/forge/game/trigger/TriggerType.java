@@ -1,10 +1,10 @@
 package forge.game.trigger;
 
+import forge.game.card.Card;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
-
-import forge.game.card.Card;
 
 
 /**
@@ -31,18 +31,24 @@ public enum TriggerType {
     BecomeMonstrous(TriggerBecomeMonstrous.class),
     BecomeRenowned(TriggerBecomeRenowned.class),
     BecomesCrewed(TriggerBecomesCrewed.class),
+    BecomesPlotted(TriggerBecomesPlotted.class),
+    BecomesSaddled(TriggerBecomesSaddled.class),
     BecomesTarget(TriggerBecomesTarget.class),
     BecomesTargetOnce(TriggerBecomesTargetOnce.class),
     BlockersDeclared(TriggerBlockersDeclared.class),
     Blocks(TriggerBlocks.class),
+    CaseSolved(TriggerCaseSolved.class),
     Championed(TriggerChampioned.class),
     ChangesController(TriggerChangesController.class),
     ChangesZone(TriggerChangesZone.class),
     ChangesZoneAll(TriggerChangesZoneAll.class),
     ChaosEnsues(TriggerChaosEnsues.class),
+    ClaimPrize(TriggerClaimPrize.class),
     Clashed(TriggerClashed.class),
     ClassLevelGained(TriggerClassLevelGained.class),
+    CommitCrime(TriggerCommitCrime.class),
     ConjureAll(TriggerConjureAll.class),
+    CollectEvidence(TriggerCollectEvidence.class),
     CounterAdded(TriggerCounterAdded.class),
     CounterAddedOnce(TriggerCounterAddedOnce.class),
     CounterPlayerAddedAll(TriggerCounterPlayerAddedAll.class),
@@ -57,17 +63,18 @@ public enum TriggerType {
     DamageDone(TriggerDamageDone.class),
     DamageDoneOnce(TriggerDamageDoneOnce.class),
     DamageDoneOnceByController(TriggerDamageDoneOnceByController.class),
-    DamagePrevented(TriggerDamagePrevented.class),
     DamagePreventedOnce(TriggerDamagePreventedOnce.class),
     DayTimeChanges (TriggerDayTimeChanges.class),
     Destroyed(TriggerDestroyed.class),
     Devoured(TriggerDevoured.class),
     Discarded(TriggerDiscarded.class),
     DiscardedAll(TriggerDiscardedAll.class),
+    Discover(TriggerDiscover.class),
     Drawn(TriggerDrawn.class),
     DungeonCompleted(TriggerCompletedDungeon.class),
     Evolved(TriggerEvolved.class),
     ExcessDamage(TriggerExcessDamage.class),
+    ExcessDamageAll(TriggerExcessDamageAll.class),
     Enlisted(TriggerEnlisted.class),
     Exerted(TriggerExerted.class),
     Exiled(TriggerExiled.class),
@@ -76,16 +83,24 @@ public enum TriggerType {
     Fight(TriggerFight.class),
     FightOnce(TriggerFightOnce.class),
     FlippedCoin(TriggerFlippedCoin.class),
+    Forage(TriggerForage.class),
     Foretell(TriggerForetell.class),
+    FullyUnlock(TriggerFullyUnlock.class),
+    GiveGift(TriggerGiveGift.class),
     Immediate(TriggerImmediate.class),
     Investigated(TriggerInvestigated.class),
-    IsForetold(TriggerIsForetold.class),
     LandPlayed(TriggerLandPlayed.class),
+    LifeChanged(TriggerLifeChanged.class),
     LifeGained(TriggerLifeGained.class),
     LifeLost(TriggerLifeLost.class),
     LifeLostAll(TriggerLifeLostAll.class),
     LosesGame(TriggerLosesGame.class),
     ManaAdded(TriggerManaAdded.class),
+    ManaExpend(TriggerManaExpend.class),
+    ManifestDread(TriggerManifestDread.class),
+    Mentored(TriggerMentored.class),
+    Milled(TriggerMilled.class),
+    MilledOnce(TriggerMilledOnce.class),
     MilledAll(TriggerMilledAll.class),
     Mutates(TriggerMutates.class),
     NewGame(TriggerNewGame.class),
@@ -95,6 +110,7 @@ public enum TriggerType {
     Phase(TriggerPhase.class),
     PhaseIn(TriggerPhaseIn.class),
     PhaseOut(TriggerPhaseOut.class),
+    PhaseOutAll(TriggerPhaseOutAll.class),
     PlanarDice(TriggerPlanarDice.class),
     PlaneswalkedFrom(TriggerPlaneswalkedFrom.class),
     PlaneswalkedTo(TriggerPlaneswalkedTo.class),
@@ -104,6 +120,7 @@ public enum TriggerType {
     RolledDieOnce(TriggerRolledDieOnce.class),
     RoomEntered(TriggerEnteredRoom.class),
     Sacrificed(TriggerSacrificed.class),
+    SacrificedOnce(TriggerSacrificedOnce.class),
     Scry(TriggerScry.class),
     SearchedLibrary(TriggerSearchedLibrary.class),
     SeekAll(TriggerSeekAll.class),
@@ -117,6 +134,7 @@ public enum TriggerType {
     SpellCopy(TriggerSpellAbilityCastOrCopy.class),
     Surveil(TriggerSurveil.class),
     TakesInitiative(TriggerTakesInitiative.class),
+    TapAll(TriggerTapAll.class),
     Taps(TriggerTaps.class),
     TapsForMana(TriggerTapsForMana.class),
     TokenCreated(TriggerTokenCreated.class),
@@ -126,7 +144,10 @@ public enum TriggerType {
     TurnBegin(TriggerTurnBegin.class),
     TurnFaceUp(TriggerTurnFaceUp.class),
     Unattach(TriggerUnattach.class),
+    UnlockDoor(TriggerUnlockDoor.class),
+    UntapAll(TriggerUntapAll.class),
     Untaps(TriggerUntaps.class),
+    VisitAttraction(TriggerVisitAttraction.class),
     Vote(TriggerVote.class);
 
     private final Constructor<? extends Trigger> constructor;

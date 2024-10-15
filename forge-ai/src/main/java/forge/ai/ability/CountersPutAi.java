@@ -1,6 +1,5 @@
 package forge.ai.ability;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -171,13 +170,7 @@ public class CountersPutAi extends CountersAi {
                     CardCollection oppCreatM1 = CardLists.filter(oppCreat, CardPredicates.hasCounter(CounterEnumType.M1M1));
                     oppCreatM1 = CardLists.getNotKeyword(oppCreatM1, Keyword.UNDYING);
 
-                    oppCreatM1 = CardLists.filter(oppCreatM1, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(Card input) {
-                            return input.getNetToughness() <= 1 && input.canReceiveCounters(CounterType.get(CounterEnumType.M1M1));
-                        }
-
-                    });
+                    oppCreatM1 = CardLists.filter(oppCreatM1, input -> input.getNetToughness() <= 1 && input.canReceiveCounters(CounterType.get(CounterEnumType.M1M1)));
 
                     Card best = ComputerUtilCard.getBestAI(oppCreatM1);
                     if (best != null) {
@@ -188,17 +181,14 @@ public class CountersPutAi extends CountersAi {
                     CardCollection aiCreat = CardLists.getTargetableCards(ai.getCreaturesInPlay(), sa);
                     aiCreat = CardLists.filter(aiCreat, CardPredicates.hasCounters());
 
-                    aiCreat = CardLists.filter(aiCreat, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(Card input) {
-                            for (CounterType counterType : input.getCounters().keySet()) {
-                                if (!ComputerUtil.isNegativeCounter(counterType, input)
-                                        && input.canReceiveCounters(counterType)) {
-                                    return true;
-                                }
+                    aiCreat = CardLists.filter(aiCreat, input -> {
+                        for (CounterType counterType : input.getCounters().keySet()) {
+                            if (!ComputerUtil.isNegativeCounter(counterType, input)
+                                    && input.canReceiveCounters(counterType)) {
+                                return true;
                             }
-                            return false;
                         }
+                        return false;
                     });
 
                     // TODO check whole state which creature would be the best
@@ -251,8 +241,8 @@ public class CountersPutAi extends CountersAi {
                 } else if (ai.getGame().getCombat().isBlocking(source)) {
                     // when blocking, consider this if it's possible to save the blocker and/or kill at least one attacker
                     CardCollection blocked = ai.getGame().getCombat().getAttackersBlockedBy(source);
-                    int totBlkPower = Aggregates.sum(blocked, CardPredicates.Accessors.fnGetNetPower);
-                    int totBlkToughness = Aggregates.min(blocked, CardPredicates.Accessors.fnGetNetToughness);
+                    int totBlkPower = Aggregates.sum(blocked, Card::getNetPower);
+                    int totBlkToughness = Aggregates.min(blocked, Card::getNetToughness);
 
                     int numActivations = ai.getCounters(CounterEnumType.ENERGY) / sa.getPayCosts().getCostEnergy().convertAmount();
                     if (source.getNetToughness() + numActivations > totBlkPower
@@ -305,6 +295,12 @@ public class CountersPutAi extends CountersAi {
                 AiCardMemory.rememberCard(ai, source, AiCardMemory.MemorySet.HELD_MANA_SOURCES_FOR_MAIN2);
             }
             return willActivate;
+        } else if (logic.equals("ChargeToBestCMC")) {
+            return doChargeToCMCLogic(ai, sa);
+        } else if (logic.equals("ChargeToBestOppControlledCMC")) {
+            return doChargeToOppCtrlCMCLogic(ai, sa);
+        } else if (logic.equals("TheOneRing")) {
+            return SpecialCardAi.TheOneRing.consider(ai, sa);
         }
 
         if (!sa.metConditions() && sa.getSubAbility() == null) {
@@ -321,7 +317,7 @@ public class CountersPutAi extends CountersAi {
 
         if (sa.hasParam("Bolster")) {
             CardCollection creatsYouCtrl = ai.getCreaturesInPlay();
-            List<Card> leastToughness = Aggregates.listWithMin(creatsYouCtrl, CardPredicates.Accessors.fnGetNetToughness);
+            List<Card> leastToughness = Aggregates.listWithMin(creatsYouCtrl, Card::getNetToughness);
             if (leastToughness.isEmpty()) {
                 return false;
             }
@@ -383,7 +379,7 @@ public class CountersPutAi extends CountersAi {
                 sa.setXManaCostPaid(amount);
             } else if ("ExiledCreatureFromGraveCMC".equals(logic)) {
                 // e.g. Necropolis
-                amount = Aggregates.max(CardLists.filter(ai.getCardsIn(ZoneType.Graveyard), CardPredicates.Presets.CREATURES), CardPredicates.Accessors.fnGetCmc);
+                amount = Aggregates.max(CardLists.filter(ai.getCardsIn(ZoneType.Graveyard), CardPredicates.Presets.CREATURES), Card::getCMC);
                 if (amount > 0 && ai.getGame().getPhaseHandler().is(PhaseType.END_OF_TURN)) {
                     return true;
                 }
@@ -436,6 +432,9 @@ public class CountersPutAi extends CountersAi {
             }
         }
 
+        final boolean hasSacCost = abCost.hasSpecificCostType(CostSacrifice.class);
+        final boolean sacSelf = ComputerUtilCost.isSacrificeSelfCost(abCost);
+
         if (sa.usesTargeting()) {
             if (!ai.getGame().getStack().isEmpty() && !isSorcerySpeed(sa, ai)) {
                 // only evaluates case where all tokens are placed on a single target
@@ -449,14 +448,14 @@ public class CountersPutAi extends CountersAi {
                         sa.addDividedAllocation(c, amount);
                         return true;
                     } else {
-                        return false;
+                        if (!hasSacCost) { // for Sacrifice costs, evaluate further to see if it's worth using the ability before the card dies
+                            return false;
+                        }
                     }
                 }
             }
 
             sa.resetTargets();
-
-            final boolean sacSelf = ComputerUtilCost.isSacrificeSelfCost(abCost);
 
             if (sa.isCurse()) {
                 list = ai.getOpponents().getCardsIn(ZoneType.Battlefield);
@@ -464,22 +463,21 @@ public class CountersPutAi extends CountersAi {
                 list = ComputerUtil.getSafeTargets(ai, sa, ai.getCardsIn(ZoneType.Battlefield));
             }
 
-            list = CardLists.filter(list, new Predicate<Card>() {
-                @Override
-                public boolean apply(final Card c) {
-                    // don't put the counter on the dead creature
-                    if (sacSelf && c.equals(source)) {
-                        return false;
-                    }
-                    if ("NoCounterOfType".equals(sa.getParam("AILogic"))) {
-                        for (String ctrType : types) {
-                            if (c.getCounters(CounterType.getType(ctrType)) > 0) {
-                                return false;
-                            }
+            list = CardLists.filter(list, c -> {
+                // don't put the counter on the dead creature
+                if (sacSelf && c.equals(source)) {
+                    return false;
+                } else if (hasSacCost && !ComputerUtil.shouldSacrificeThreatenedCard(ai, c, sa)) {
+                    return false;
+                }
+                if ("NoCounterOfType".equals(sa.getParam("AILogic"))) {
+                    for (String ctrType : types) {
+                        if (c.getCounters(CounterType.getType(ctrType)) > 0) {
+                            return false;
                         }
                     }
-                    return sa.canTarget(c) && c.canReceiveCounters(CounterType.getType(type));
                 }
+                return sa.canTarget(c) && c.canReceiveCounters(CounterType.getType(type));
             });
 
             // Filter AI-specific targets if provided
@@ -624,7 +622,7 @@ public class CountersPutAi extends CountersAi {
             }
             // Instant +1/+1
             if (type.equals("P1P1") && !isSorcerySpeed(sa, ai)) {
-                if (!(ph.getNextTurn() == ai && ph.is(PhaseType.END_OF_TURN) && abCost.isReusuableResource())) {
+                if (!hasSacCost && !(ph.getNextTurn() == ai && ph.is(PhaseType.END_OF_TURN) && abCost.isReusuableResource())) {
                     return false; // only if next turn and cost is reusable
                 }
             }
@@ -740,6 +738,7 @@ public class CountersPutAi extends CountersAi {
     protected boolean doTriggerAINoCost(Player ai, SpellAbility sa, boolean mandatory) {
         final SpellAbility root = sa.getRootAbility();
         final Card source = sa.getHostCard();
+        final String aiLogic = sa.getParamOrDefault("AILogic", "");
         // boolean chance = true;
         boolean preferred = true;
         CardCollection list;
@@ -747,6 +746,7 @@ public class CountersPutAi extends CountersAi {
         final boolean divided = sa.isDividedAsYouChoose();
         final int amount = AbilityUtils.calculateAmount(source, amountStr, sa);
         int left = amount;
+
         final String[] types;
         String type = "";
         if (sa.hasParam("CounterType")) {
@@ -757,6 +757,12 @@ public class CountersPutAi extends CountersAi {
             // all types will be added
             types = sa.getParam("CounterTypes").split(",");
             type = types[0];
+        }
+
+        if ("ChargeToBestCMC".equals(aiLogic)) {
+            return doChargeToCMCLogic(ai, sa) || mandatory;
+        } else if ("ChargeToBestOppControlledCMC".equals(aiLogic)) {
+            return doChargeToOppCtrlCMCLogic(ai, sa) || mandatory;
         }
 
         if (!sa.usesTargeting()) {
@@ -909,13 +915,9 @@ public class CountersPutAi extends CountersAi {
             final int tributeAmount = AbilityUtils.calculateAmount(source, amountStr, sa);
 
             final boolean isHaste = source.hasKeyword(Keyword.HASTE);
-            List<Card> threatening = CardLists.filter(creats, new Predicate<Card>() {
-                @Override
-                public boolean apply(Card c) {
-                    return CombatUtil.canBlock(source, c, !isHaste)
-                            && (c.getNetToughness() > source.getNetPower() + tributeAmount || c.hasKeyword(Keyword.DEATHTOUCH));
-                }
-            });
+            List<Card> threatening = CardLists.filter(creats, c -> CombatUtil.canBlock(source, c, !isHaste)
+                    && (c.getNetToughness() > source.getNetPower() + tributeAmount || c.hasKeyword(Keyword.DEATHTOUCH))
+            );
             if (!threatening.isEmpty()) {
                 return true;
             }
@@ -927,12 +929,9 @@ public class CountersPutAi extends CountersAi {
                     return false;
                 } else if (logic.equals("CanBlockThisTurn")) {
                     // pump haste
-                    List<Card> canBlock = CardLists.filter(creats, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(Card c) {
-                            return CombatUtil.canBlock(source, c) && (c.getNetToughness() > source.getNetPower() || c.hasKeyword(Keyword.DEATHTOUCH));
-                        }
-                    });
+                    List<Card> canBlock = CardLists.filter(creats, c -> CombatUtil.canBlock(source, c)
+                            && (c.getNetToughness() > source.getNetPower() || c.hasKeyword(Keyword.DEATHTOUCH))
+                    );
                     if (!canBlock.isEmpty()) {
                         return false;
                     }
@@ -984,22 +983,19 @@ public class CountersPutAi extends CountersAi {
             final CardCollection opponents = CardLists.filterControlledBy(options, ai.getOpponents());
 
             if (!opponents.isEmpty()) {
-                final CardCollection negative = CardLists.filter(opponents, new Predicate<Card>() {
-                    @Override
-                    public boolean apply(Card input) {
-                        if (input.hasSVar("EndOfTurnLeavePlay"))
-                            return false;
-                        if (ComputerUtilCard.isUselessCreature(ai, input))
-                            return false;
-                        for (CounterType type : types) {
-                            if (type.is(CounterEnumType.M1M1) && amount >= input.getNetToughness())
-                                return true;
-                            if (ComputerUtil.isNegativeCounter(type, input)) {
-                                return true;
-                            }
-                        }
+                final CardCollection negative = CardLists.filter(opponents, input -> {
+                    if (input.hasSVar("EndOfTurnLeavePlay"))
                         return false;
+                    if (ComputerUtilCard.isUselessCreature(ai, input))
+                        return false;
+                    for (CounterType type : types) {
+                        if (type.is(CounterEnumType.M1M1) && amount >= input.getNetToughness())
+                            return true;
+                        if (ComputerUtil.isNegativeCounter(type, input)) {
+                            return true;
+                        }
                     }
+                    return false;
                 });
                 if (!negative.isEmpty()) {
                     return ComputerUtilCard.getBestAI(negative);
@@ -1034,13 +1030,10 @@ public class CountersPutAi extends CountersAi {
         if (doNotHaveKeyword.size() > 0)
             filtered = doNotHaveKeyword;
 
-        final CardCollection notUseless = CardLists.filter(filtered, new Predicate<Card>() {
-            @Override
-            public boolean apply(Card input) {
-                if (input.hasSVar("EndOfTurnLeavePlay"))
-                    return false;
-                return !ComputerUtilCard.isUselessCreature(ai, input);
-            }
+        final CardCollection notUseless = CardLists.filter(filtered, input -> {
+            if (input.hasSVar("EndOfTurnLeavePlay"))
+                return false;
+            return !ComputerUtilCard.isUselessCreature(ai, input);
         });
 
         if (!notUseless.isEmpty()) {
@@ -1050,26 +1043,20 @@ public class CountersPutAi extends CountersAi {
         // some special logic to reload Persist/Undying
         for (CounterType type : types) {
             if (p1p1.equals(type)) {
-                final CardCollection persist = CardLists.filter(filtered, new Predicate<Card>() {
-                    @Override
-                    public boolean apply(Card input) {
-                        if (!input.hasKeyword(Keyword.PERSIST))
-                            return false;
-                        return input.getCounters(m1m1) <= amount;
-                    }
+                final CardCollection persist = CardLists.filter(filtered, input -> {
+                    if (!input.hasKeyword(Keyword.PERSIST))
+                        return false;
+                    return input.getCounters(m1m1) <= amount;
                 });
 
                 if (!persist.isEmpty()) {
                     filtered = persist;
                 }
             } else if (m1m1.equals(type)) {
-                final CardCollection undying = CardLists.filter(filtered, new Predicate<Card>() {
-                    @Override
-                    public boolean apply(Card input) {
-                        if (!input.hasKeyword(Keyword.UNDYING))
-                            return false;
-                        return input.getCounters(p1p1) <= amount && input.getNetToughness() > amount;
-                    }
+                final CardCollection undying = CardLists.filter(filtered, input -> {
+                    if (!input.hasKeyword(Keyword.UNDYING))
+                        return false;
+                    return input.getCounters(p1p1) <= amount && input.getNetToughness() > amount;
                 });
 
                 if (!undying.isEmpty()) {
@@ -1142,15 +1129,12 @@ public class CountersPutAi extends CountersAi {
         CardCollection targets = CardLists.getTargetableCards(ai.getCreaturesInPlay(), sa);
         targets.remove(source);
 
-        targets = CardLists.filter(targets, new Predicate<Card>() {
-            @Override
-            public boolean apply(Card card) {
-                boolean tgtThreatened = ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card)
-                        || (combat != null && ((combat.isBlocked(card) && ComputerUtilCombat.attackerWouldBeDestroyed(ai, card, combat))
-                        || (combat.isBlocking(card) && ComputerUtilCombat.blockerWouldBeDestroyed(ai, card, combat))));
-                // when threatened, any non-threatened target is good to preserve the counter
-                return !tgtThreatened && (threatened || ComputerUtilCard.evaluateCreature(card, false, false) > ComputerUtilCard.evaluateCreature(source, false, false) + creatDiff);
-            }
+        targets = CardLists.filter(targets, card -> {
+            boolean tgtThreatened = ComputerUtil.predictThreatenedObjects(ai, null, true).contains(card)
+                    || (combat != null && ((combat.isBlocked(card) && ComputerUtilCombat.attackerWouldBeDestroyed(ai, card, combat))
+                    || (combat.isBlocking(card) && ComputerUtilCombat.blockerWouldBeDestroyed(ai, card, combat))));
+            // when threatened, any non-threatened target is good to preserve the counter
+            return !tgtThreatened && (threatened || ComputerUtilCard.evaluateCreature(card, false, false) > ComputerUtilCard.evaluateCreature(source, false, false) + creatDiff);
         });
 
         Card bestTgt = ComputerUtilCard.getBestCreatureAI(targets);
@@ -1175,7 +1159,7 @@ public class CountersPutAi extends CountersAi {
                     }
                 }
 
-                int totBlkPower = Aggregates.sum(combat.getBlockers(source), CardPredicates.Accessors.fnGetNetPower);
+                int totBlkPower = Aggregates.sum(combat.getBlockers(source), Card::getNetPower);
                 if (source.getNetToughness() <= totBlkPower
                         && source.getNetToughness() + amount > totBlkPower) {
                     return true;
@@ -1189,7 +1173,7 @@ public class CountersPutAi extends CountersAi {
                 }
             }
 
-            int totAtkPower = Aggregates.sum(combat.getAttackersBlockedBy(source), CardPredicates.Accessors.fnGetNetPower);
+            int totAtkPower = Aggregates.sum(combat.getAttackersBlockedBy(source), Card::getNetPower);
             if (source.getNetToughness() <= totAtkPower
                     && source.getNetToughness() + amount > totAtkPower) {
                 return true;
@@ -1206,4 +1190,38 @@ public class CountersPutAi extends CountersAi {
         return max;
     }
 
+    private boolean doChargeToCMCLogic(Player ai, SpellAbility sa) {
+        Card source = sa.getHostCard();
+        CardCollectionView ownLib = CardLists.filter(ai.getCardsIn(ZoneType.Library), CardPredicates.isType("Creature"));
+        int numCtrs = source.getCounters(CounterEnumType.CHARGE);
+        int maxCMC = Aggregates.max(ownLib, Card::getCMC);
+        int optimalCMC = 0;
+        int curAmount = 0;
+        // Assume the AI knows its deck list and realizes what it has left in its library. Could be improved to make this less cheat-y.
+        for (int cmc = numCtrs; cmc <= maxCMC; cmc++) {
+            int numPerCMC = CardLists.filter(ownLib, CardPredicates.hasCMC(cmc)).size();
+            if (numPerCMC >= curAmount) {
+                curAmount = numPerCMC;
+                optimalCMC = cmc;
+            }
+        }
+        return numCtrs < optimalCMC;
+    }
+
+    private boolean doChargeToOppCtrlCMCLogic(Player ai, SpellAbility sa) {
+        Card source = sa.getHostCard();
+        CardCollectionView oppInPlay = CardLists.filter(ai.getOpponents().getCardsIn(ZoneType.Battlefield), CardPredicates.Presets.NONLAND_PERMANENTS);
+        int numCtrs = source.getCounters(CounterEnumType.CHARGE);
+        int maxCMC = Aggregates.max(oppInPlay, Card::getCMC);
+        int optimalCMC = 0;
+        int curAmount = 0;
+        for (int cmc = numCtrs; cmc <= maxCMC; cmc++) {
+            int numPerCMC = CardLists.filter(oppInPlay, CardPredicates.hasCMC(cmc)).size();
+            if (numPerCMC >= curAmount) {
+                curAmount = numPerCMC;
+                optimalCMC = cmc;
+            }
+        }
+        return numCtrs < optimalCMC;
+    }
 }

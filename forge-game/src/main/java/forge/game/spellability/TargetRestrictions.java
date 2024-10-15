@@ -52,12 +52,14 @@ public class TargetRestrictions {
 
     // The target SA of this SA must be targeting a Valid X
     private String saValidTargeting = null;
-    
+
     // Additional restrictions that may not fit into Valid
     private boolean uniqueTargets = false;
     private boolean singleZone = false;
+    private boolean forEachPlayer = false;
     private boolean differentControllers = false;
     private boolean differentCMC = false;
+    private boolean equalToughness = false;
     private boolean sameController = false;
     private boolean withoutSameCreatureType = false;
     private boolean withSameCreatureType = false;
@@ -98,8 +100,10 @@ public class TargetRestrictions {
         this.saValidTargeting = target.getSAValidTargeting();
         this.uniqueTargets = target.isUniqueTargets();
         this.singleZone = target.isSingleZone();
+        this.forEachPlayer = target.isForEachPlayer();
         this.differentControllers = target.isDifferentControllers();
         this.differentCMC = target.isDifferentCMC();
+        this.equalToughness = target.isEqualToughness();
         this.sameController = target.isSameController();
         this.withoutSameCreatureType = target.isWithoutSameCreatureType();
         this.withSameCreatureType = target.isWithSameCreatureType();
@@ -206,7 +210,7 @@ public class TargetRestrictions {
      *
      * @return the max targets
      */
-    private final String getMaxTotalCMC() {
+    private String getMaxTotalCMC() {
         return this.maxTotalCMC;
     }
 
@@ -219,7 +223,7 @@ public class TargetRestrictions {
      *
      * @return the max targets
      */
-    private final String getMaxTotalPower() {
+    private String getMaxTotalPower() {
         return this.maxTotalPower;
     }
 
@@ -616,6 +620,21 @@ public class TargetRestrictions {
     public void setDifferentCMC(boolean different) {
         this.differentCMC = different;
     }
+
+    /**
+     * @return the equalToughness
+     */
+    public boolean isEqualToughness() {
+        return equalToughness;
+    }
+
+    /**
+     * @param b the equalToughness to set
+     */
+    public void setEqualToughness(boolean b) {
+        this.equalToughness = b;
+    }
+
     /**
      * @return the differentControllers
      */
@@ -629,6 +648,14 @@ public class TargetRestrictions {
     public void setDifferentControllers(boolean different) {
         this.differentControllers = different;
     }
+
+    public boolean isForEachPlayer() {
+        return forEachPlayer;
+    }
+    public void setForEachPlayer(boolean each) {
+        this.forEachPlayer = each;
+    }
+
     /**
      * Checks if is same controller.
      * 

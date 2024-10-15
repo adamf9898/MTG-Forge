@@ -62,6 +62,10 @@ public class TriggerCounterRemoved extends Trigger {
             return false;
         }
 
+        if (!matchesValidParam("ValidPlayer", runParams.get(AbilityKey.Player))) {
+            return false;
+        }
+
         if (hasParam("CounterType")) {
             final String type = getParam("CounterType");
             if (!type.equals(addedType.toString())) {
@@ -72,7 +76,7 @@ public class TriggerCounterRemoved extends Trigger {
         if (hasParam("NewCounterAmount")) {
             final String amtString = getParam("NewCounterAmount");
             int amt = Integer.parseInt(amtString);
-            if(amt != addedNewCounterAmount.intValue()) {
+            if(amt != addedNewCounterAmount) {
                 return false;
             }
         }

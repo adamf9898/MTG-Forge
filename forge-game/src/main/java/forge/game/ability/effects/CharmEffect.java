@@ -1,14 +1,16 @@
 package forge.game.ability.effects;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+
+import org.apache.commons.lang3.StringUtils;
 
 import com.google.common.collect.Lists;
 
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
+import forge.game.cost.Cost;
 import forge.game.player.Player;
 import forge.game.spellability.AbilitySub;
 import forge.game.spellability.SpellAbility;
@@ -34,7 +36,7 @@ public class CharmEffect extends SpellAbilityEffect {
             List<AbilitySub> toRemove = Lists.newArrayList();
             for (AbilitySub ch : choices) {
                 // 603.3c If one of the modes would be illegal, that mode can't be chosen.
-                if ((ch.usesTargeting() && ch.isTrigger() && ch.getMinTargets() > 0 &&
+                if ((ch.usesTargeting() && ch.getMinTargets() > 0 &&
                         ch.getTargetRestrictions().getNumCandidates(ch, true) == 0) ||
                         (restriction != null && restriction.contains(ch.getDescription()))) {
                     toRemove.add(ch);
@@ -59,11 +61,14 @@ public class CharmEffect extends SpellAbilityEffect {
         Card source = sa.getHostCard();
 
         List<AbilitySub> list = CharmEffect.makePossibleOptions(sa);
-        final int num;
+        String numParam = sa.getParamOrDefault("CharmNum", "1");
+        boolean isX = numParam.equals("X");
+        boolean repeat = sa.hasParam("CanRepeatModes");
+        int num = 0;
         boolean additionalDesc = sa.hasParam("AdditionalDescription");
         boolean optional = sa.hasParam("Optional");
         // hotfix for complex cards when using getCardForUi
-        if (source.getController() == null && additionalDesc && !optional) {
+        if (source.getController() == null && !StringUtils.isNumeric(numParam) && additionalDesc && !optional) {
             // using getCardForUi game is not set, so can't guess max charm
             num = Integer.MAX_VALUE;
         } else {
@@ -71,28 +76,41 @@ public class CharmEffect extends SpellAbilityEffect {
             if (sa.getActivatingPlayer() == null) {
                 sa.setActivatingPlayer(source.getController(), true);
             }
-            num = Math.min(AbilityUtils.calculateAmount(source, sa.getParamOrDefault("CharmNum", "1"), sa), list.size());
+            if (!isX) {
+                num = AbilityUtils.calculateAmount(source, numParam, sa);
+                if (!repeat) {
+                    num = Math.min(num, list.size());
+                }
+            }
         }
         final int min = sa.hasParam("MinCharmNum") ? AbilityUtils.calculateAmount(source, sa.getParam("MinCharmNum"), sa) : num;
 
-        boolean repeat = sa.hasParam("CanRepeatModes");
         boolean random = sa.hasParam("Random");
         boolean limit = sa.hasParam("ActivationLimit");
         boolean gameLimit = sa.hasParam("GameActivationLimit");
         boolean oppChooses = "Opponent".equals(sa.getParam("Chooser"));
+        boolean spree = sa.hasParam("Spree");
 
         StringBuilder sb = new StringBuilder();
         sb.append(sa.getCostDescription());
-        sb.append(oppChooses ? "An opponent chooses " : "Choose ");
 
-        if (num == min || num == Integer.MAX_VALUE) {
-            sb.append(num == 0 ? "up to that many" : Lang.getNumeral(min));
-        } else if (min == 0 && num == sa.getParam("Choices").split(",").length) {
-            sb.append("any number ");
-        } else if (min == 0) {
-            sb.append("up to ").append(Lang.getNumeral(num));
-        } else {
-            sb.append(Lang.getNumeral(min)).append(" or ").append(list.size() == 2 ? "both" : "more");
+        if (!spree) {
+            sb.append(oppChooses ? "An opponent chooses " : "Choose ");
+            if (isX) {
+                sb.append(sa.hasParam("MinCharmNum") && min == 0 ? "up to " : "").append("X");
+            } else if (num == min || num == Integer.MAX_VALUE) {
+                sb.append(num == 0 ? "up to that many" : Lang.getNumeral(min));
+            } else if (min == 0 && num == sa.getParam("Choices").split(",").length) {
+                sb.append("any number ");
+            } else if (min == 0) {
+                sb.append("up to ").append(Lang.getNumeral(num));
+            } else {
+                sb.append(Lang.getNumeral(min)).append(" or ").append(list.size() == 2 ? "both" : "more");
+            }
+        }
+
+        if (sa.hasParam("Pawprint")) {
+            sb.append("{P} worth of modes");
         }
 
         if (sa.hasParam("ChoiceRestriction")) {
@@ -135,6 +153,8 @@ public class CharmEffect extends SpellAbilityEffect {
                 sb.append(". ").append(addDescS.trim());
             } else if (addDescS.startsWith(("."))) {
                 sb.append(addDescS.trim());
+            } else if (addDescS.startsWith("where X")) {
+                sb.append(", ").append(addDescS.trim()).append(" \u2014");
             } else {
                 sb.append(" ").append(addDescS.trim());
             }
@@ -143,12 +163,21 @@ public class CharmEffect extends SpellAbilityEffect {
         if (!includeChosen) {
             sb.append(num == 1 ? " mode." : " modes.");
         } else if (!list.isEmpty()) {
-            if (!repeat && !additionalDesc && !limit && !gameLimit) {
-                sb.append(" \u2014");
+            if (!spree) {
+                if (!repeat && !additionalDesc && !limit && !gameLimit) {
+                    sb.append(" \u2014");
+                }
+                sb.append("\r\n");
             }
-            sb.append("\r\n");
             for (AbilitySub sub : list) {
-                sb.append("\u2022 ").append(sub.getParam("SpellDescription"));
+                if (spree) {
+                    sb.append("+ " + new Cost(sub.getParam("SpreeCost"), false).toSimpleString() + " \u2014 ");
+                } else if (sub.hasParam("Pawprint")) {
+                    sb.append(StringUtils.repeat("{P}", Integer.parseInt(sub.getParam("Pawprint"))) + " \u2014 ");
+                } else {
+                    sb.append("\u2022 ");
+                }
+                sb.append(sub.getParam("SpellDescription"));
                 sb.append("\r\n");
             }
             sb.append("\r\n");
@@ -188,14 +217,17 @@ public class CharmEffect extends SpellAbilityEffect {
         final Card source = sa.getHostCard();
         final Player activator = sa.getActivatingPlayer();
 
+        boolean canRepeat = sa.hasParam("CanRepeatModes");
         int num = AbilityUtils.calculateAmount(source, sa.getParamOrDefault("CharmNum", "1"), sa);
         final int min = sa.hasParam("MinCharmNum") ? AbilityUtils.calculateAmount(source, sa.getParam("MinCharmNum"), sa) : num;
 
         // if the amount of choices is smaller than min then they can't be chosen
-        if (min > choices.size()) {
-            return false;
+        if (!canRepeat) {
+            if (min > choices.size()) {
+                return false;
+            }
+            num = Math.min(num, choices.size());
         }
-        num = Math.min(num, choices.size());
 
         boolean isOptional = sa.hasParam("Optional");
         if (isOptional && !activator.getController().confirmAction(sa, null, Localizer.getInstance().getMessage("lblWouldYouLikeCharm", CardTranslation.getTranslatedName(source.getName())), null)) {
@@ -216,10 +248,10 @@ public class CharmEffect extends SpellAbilityEffect {
             //String choosers = sa.getParam("Chooser");
             FCollection<Player> opponents = activator.getOpponents(); // all cards have Choser$ Opponent, so it's hardcoded here
             chooser = activator.getController().chooseSingleEntityForEffect(opponents, sa, "Choose an opponent", null);
-            source.setChosenPlayer(chooser);
+            sa.setChoosingPlayer(chooser);
         }
 
-        List<AbilitySub> chosen = chooser.getController().chooseModeForAbility(sa, choices, min, num, sa.hasParam("CanRepeatModes"));
+        List<AbilitySub> chosen = chooser.getController().chooseModeForAbility(sa, choices, min, num, canRepeat);
         chainAbilities(sa, chosen);
 
         // trigger without chosen modes are removed from stack
@@ -231,18 +263,13 @@ public class CharmEffect extends SpellAbilityEffect {
         return true;
     }
 
-    private static void chainAbilities(SpellAbility sa, List<AbilitySub> chosen) {
+    public static void chainAbilities(SpellAbility sa, List<AbilitySub> chosen) {
         if (chosen == null) {
             return;
         }
 
         // Sort Chosen by SA order
-        Collections.sort(chosen, new Comparator<AbilitySub>() {
-            @Override
-            public int compare(AbilitySub o1, AbilitySub o2) {
-                return Integer.compare(o1.getSVarInt("CharmOrder"), o2.getSVarInt("CharmOrder"));
-            }
-        });
+        chosen.sort(Comparator.comparingInt(o -> o.getSVarInt("CharmOrder")));
 
         for (AbilitySub sub : chosen) {
             // Clone the chosen, just in case the same subAb gets chosen multiple times

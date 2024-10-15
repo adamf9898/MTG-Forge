@@ -1,35 +1,19 @@
 package forge.ai.ability;
 
-import java.util.List;
-import java.util.Map;
-
-import org.checkerframework.checker.nullness.qual.Nullable;
-
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
-
-import forge.ai.AiCardMemory;
-import forge.ai.AiController;
-import forge.ai.ComputerUtil;
-import forge.ai.ComputerUtilCard;
-import forge.ai.PlayerControllerAi;
-import forge.ai.SpecialCardAi;
-import forge.ai.SpellAbilityAi;
-import forge.ai.SpellApiToAi;
+import forge.ai.*;
 import forge.game.CardTraitPredicates;
 import forge.game.Game;
+import forge.game.GameEntity;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.ApiType;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardCollectionView;
-import forge.game.card.CardLists;
-import forge.game.card.CardPredicates;
-import forge.game.card.CardUtil;
+import forge.game.card.*;
+import forge.game.card.CardPredicates.Presets;
 import forge.game.combat.Combat;
 import forge.game.combat.CombatUtil;
+import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
@@ -44,6 +28,10 @@ import forge.game.zone.MagicStack;
 import forge.game.zone.ZoneType;
 import forge.util.MyRandom;
 import forge.util.TextUtil;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class EffectAi extends SpellAbilityAi {
     @Override
@@ -80,6 +68,41 @@ public class EffectAi extends SpellAbilityAi {
                     }
                     randomReturn = true;
                 }
+            } else if (logic.equals("RestrictBlocking")) {
+                if (!phase.isPlayerTurn(ai) || phase.getPhase().isBefore(PhaseType.COMBAT_BEGIN)
+                        || phase.getPhase().isAfter(PhaseType.COMBAT_DECLARE_ATTACKERS)) {
+                    return false;
+                }
+
+                if (sa.getPayCosts().getTotalMana().countX() > 0 && sa.getHostCard().getSVar("X").equals("Count$xPaid")) {
+                    // Set PayX here to half the remaining mana to allow for Main 2 and other combat shenanigans.
+                    final int xPay = ComputerUtilMana.determineLeftoverMana(sa, ai, sa.isTrigger()) / 2;
+                    if (xPay == 0) { return false; }
+                    sa.setXManaCostPaid(xPay);
+                }
+
+                Player opp = ai.getStrongestOpponent();
+                List<Card> possibleAttackers = ai.getCreaturesInPlay();
+                List<Card> possibleBlockers = opp.getCreaturesInPlay();
+                possibleBlockers = CardLists.filter(possibleBlockers, Presets.UNTAPPED);
+                final Combat combat = game.getCombat();
+                int oppLife = opp.getLife();
+                int potentialDmg = 0;
+                List<Card> currentAttackers = new ArrayList<>();
+
+                if (possibleBlockers.isEmpty()) { return false; }
+
+                for (final Card creat : possibleAttackers) {
+                    if (CombatUtil.canAttack(creat, opp) && possibleBlockers.size() > 1) {
+                        potentialDmg += creat.getCurrentPower();
+                        if (potentialDmg >= oppLife) { return true; }
+                    }
+                    if (combat != null && combat.isAttacking(creat)) {
+                        currentAttackers.add(creat);
+                    }
+                }
+
+                return currentAttackers.size() > possibleBlockers.size();
             } else if (logic.equals("Fog")) {
                 FogAi fogAi = new FogAi();
                 if (!fogAi.canPlayAI(ai, sa)) {
@@ -148,22 +171,12 @@ public class EffectAi extends SpellAbilityAi {
                     List<Card> human = opp.getCreaturesInPlay();
 
                     // only count creatures that can attack or block
-                    comp = CardLists.filter(comp, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(final Card c) {
-                            return CombatUtil.canAttack(c, opp);
-                        }
-                    });
+                    comp = CardLists.filter(comp, c -> CombatUtil.canAttack(c, opp));
                     if (comp.size() < 2) {
                         continue;
                     }
                     final List<Card> attackers = comp;
-                    human = CardLists.filter(human, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(final Card c) {
-                            return CombatUtil.canBlockAtLeastOne(c, attackers);
-                        }
-                    });
+                    human = CardLists.filter(human, c -> CombatUtil.canBlockAtLeastOne(c, attackers));
                     if (human.isEmpty()) {
                         continue;
                     }
@@ -207,12 +220,56 @@ public class EffectAi extends SpellAbilityAi {
                 }
                 return false;
             } else if (logic.equals("NoGain")) {
-            	// basic logic to cancel GainLife on stack
-                if (game.getStack().isEmpty()) {
-                    return false;
+                // basic logic to cancel GainLife on stack
+                if (!game.getStack().isEmpty()) {
+                    SpellAbility topStack = game.getStack().peekAbility();
+                    final Player activator = topStack.getActivatingPlayer();
+                    if (activator.isOpponentOf(ai) && activator.canGainLife()) {
+                        while (topStack != null) {
+                            if (topStack.getApi() == ApiType.GainLife) {
+                                if ("You".equals(topStack.getParam("Defined")) || topStack.isTargeting(activator) || (!topStack.usesTargeting() && !topStack.hasParam("Defined"))) {
+                                    return true;
+                                }
+                            } else if (topStack.getApi() == ApiType.DealDamage && topStack.getHostCard().hasKeyword(Keyword.LIFELINK)) {
+                                Card host = topStack.getHostCard();
+                                for (GameEntity target : topStack.getTargets().getTargetEntities()) {
+                                    if (ComputerUtilCombat.predictDamageTo(target,
+                                            AbilityUtils.calculateAmount(host, topStack.getParam("NumDmg"), topStack), host, false) > 0) {
+                                        return true;
+                                    }
+                                }
+                            }
+                            topStack = topStack.getSubAbility();
+                        }
+                    }
                 }
-                final SpellAbility topStack = game.getStack().peekAbility();
-                return topStack.getActivatingPlayer().isOpponentOf(ai) && topStack.getApi() == ApiType.GainLife;
+                // also check for combat lifelink
+                if (game.getPhaseHandler().is(PhaseType.COMBAT_DECLARE_BLOCKERS)) {
+                    final Combat combat = ai.getGame().getCombat();
+                    final Player attackingPlayer = combat.getAttackingPlayer();
+                    if (attackingPlayer.isOpponentOf(ai) && attackingPlayer.canGainLife()) {
+                        if (ComputerUtilCombat.checkAttackerLifelinkDamage(combat) > 0) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            } else if (logic.equals("NonCastCreature")) {
+                // TODO: add support for more cases with more convoluted API setups
+                if (!game.getStack().isEmpty()) {
+                    SpellAbility topStack = game.getStack().peekAbility();
+                    final Player activator = topStack.getActivatingPlayer();
+                    if (activator.isOpponentOf(ai)) {
+                        boolean changeZone = topStack.getApi() == ApiType.ChangeZone || topStack.getApi() == ApiType.ChangeZoneAll;
+                        boolean toBattlefield = "Battlefield".equals(topStack.getParam("Destination"));
+                        boolean reanimator = "true".equalsIgnoreCase(topStack.getSVar("IsReanimatorCard"));
+                        if (changeZone && (toBattlefield || reanimator)) {
+                            if ("Creature".equals(topStack.getParam("ChangeType")) || topStack.getParamOrDefault("Defined", "").contains("Creature"))
+                                return true;
+                        }
+                    }
+                }
+                return false;
             } else if (logic.equals("Fight")) {
                 return FightAi.canFightAi(ai, sa, 0, 0);
             } else if (logic.equals("Pump")) {
@@ -239,7 +296,7 @@ public class EffectAi extends SpellAbilityAi {
                 }
                 if (logic.contains(":")) {
                     String[] k = logic.split(":");
-                    Integer i = Integer.valueOf(k[1]);
+                    int i = Integer.parseInt(k[1]);
                     return ai.getCreaturesInPlay().size() >= i;
                 }
                 return true;
@@ -276,24 +333,20 @@ public class EffectAi extends SpellAbilityAi {
             } else if (logic.equals("CantRegenerate")) {
                 if (sa.usesTargeting()) {
                     CardCollection list = CardLists.getTargetableCards(ai.getOpponents().getCardsIn(ZoneType.Battlefield), sa);
-                    list = CardLists.filter(list, CardPredicates.Presets.CAN_BE_DESTROYED, new Predicate<Card>() {
-
-                        @Override
-                        public boolean apply(@Nullable Card input) {
-                            Map<AbilityKey, Object> runParams = AbilityKey.mapFromAffected(input);
-                            runParams.put(AbilityKey.Regeneration, true);
-                            List<ReplacementEffect> repDestoryList = game.getReplacementHandler().getReplacementList(ReplacementType.Destroy, runParams, ReplacementLayer.Other);
-                            // no Destroy Replacement, or one non-Regeneration one like Totem-Armor
-                            if (repDestoryList.isEmpty() || Iterables.any(repDestoryList, Predicates.not(CardTraitPredicates.hasParam("Regeneration")))) {
-                                return false;
-                            }
-
-                            if (cantRegenerateCheckCombat(input) || cantRegenerateCheckStack(input)) {
-                                return true;
-                            }
-
+                    list = CardLists.filter(list, CardPredicates.Presets.CAN_BE_DESTROYED, input -> {
+                        Map<AbilityKey, Object> runParams = AbilityKey.mapFromAffected(input);
+                        runParams.put(AbilityKey.Regeneration, true);
+                        List<ReplacementEffect> repDestoryList = game.getReplacementHandler().getReplacementList(ReplacementType.Destroy, runParams, ReplacementLayer.Other);
+                        // no Destroy Replacement, or one non-Regeneration one like Totem-Armor
+                        if (repDestoryList.isEmpty() || Iterables.any(repDestoryList, Predicates.not(CardTraitPredicates.hasParam("Regeneration")))) {
                             return false;
                         }
+
+                        if (cantRegenerateCheckCombat(input) || cantRegenerateCheckStack(input)) {
+                            return true;
+                        }
+
+                        return false;
                     });
 
                     if (list.isEmpty()) {
@@ -364,10 +417,17 @@ public class EffectAi extends SpellAbilityAi {
 
     @Override
     protected boolean doTriggerAINoCost(final Player aiPlayer, final SpellAbility sa, final boolean mandatory) {
+        if (sa.hasParam("AILogic")) {
+            if (canPlayAI(aiPlayer, sa)) {
+                return true; // if false, fall through further to do the mandatory stuff
+            }
+        }
+
         // E.g. Nova Pentacle
         if (sa.usesTargeting() && !sa.getTargetRestrictions().canTgtPlayer()) {
             // try to target the opponent's best targetable permanent, if able
             CardCollection oppPerms = CardLists.getValidCards(aiPlayer.getOpponents().getCardsIn(sa.getTargetRestrictions().getZone()), sa.getTargetRestrictions().getValidTgts(), aiPlayer, sa.getHostCard(), sa);
+            oppPerms = CardLists.filter(oppPerms, sa::canTarget);
             if (!oppPerms.isEmpty()) {
                 sa.resetTargets();
                 sa.getTargets().add(ComputerUtilCard.getBestAI(oppPerms));
@@ -377,6 +437,7 @@ public class EffectAi extends SpellAbilityAi {
             if (mandatory) {
                 // try to target the AI's worst targetable permanent, if able
                 CardCollection aiPerms = CardLists.getValidCards(aiPlayer.getCardsIn(sa.getTargetRestrictions().getZone()), sa.getTargetRestrictions().getValidTgts(), aiPlayer, sa.getHostCard(), sa);
+                aiPerms = CardLists.filter(aiPerms, sa::canTarget);
                 if (!aiPerms.isEmpty()) {
                     sa.resetTargets();
                     sa.getTargets().add(ComputerUtilCard.getWorstAI(aiPerms));

@@ -47,6 +47,7 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
     public static final CardTypeView EMPTY = new CardType(false);
 
     public enum CoreType {
+        Kindred(false, "kindreds"), // always printed first
         Artifact(true, "artifacts"),
         Battle(true, "battles"),
         Conspiracy(false, "conspiracies"),
@@ -60,7 +61,6 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
         Planeswalker(true, "planeswalkers"),
         Scheme(false, "schemes"),
         Sorcery(false, "sorceries"),
-        Tribal(false, "tribals"),
         Vanguard(false, "vanguards");
 
         public final boolean isPermanent;
@@ -80,6 +80,29 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
         CoreType(final boolean permanent, final String plural) {
             isPermanent = permanent;
             pluralName = plural;
+        }
+
+        /**
+         * Converts this core type to whichever GamePieceType is typical of it.
+         * Be aware that this will not catch GamePieceTypes derived from subtypes,
+         * such as Attractions.
+         * @return a GamePieceType appropriate for this core type.
+         */
+        public GamePieceType toGamePieceType() {
+            switch(this) {
+                case Plane:
+                case Phenomenon:
+                    return GamePieceType.PLANAR;
+                case Scheme:
+                    return GamePieceType.SCHEME;
+                case Dungeon:
+                    return GamePieceType.DUNGEON;
+                case Vanguard:
+                    return GamePieceType.AVATAR;
+                //Sticker sheets will probably eventually go here.
+                default:
+                    return GamePieceType.CARD;
+            }
         }
     }
 
@@ -235,7 +258,7 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
 
     public boolean setCreatureTypes(Collection<String> ctypes) {
         // if it isn't a creature then this has no effect
-        if (!isCreature() && !isTribal()) {
+        if (!isCreature() && !isKindred()) {
             return false;
         }
         boolean changed = Iterables.removeIf(subtypes, Predicates.IS_CREATURE_TYPE);
@@ -250,7 +273,7 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
 
     @Override
     public boolean isEmpty() {
-        return coreTypes.isEmpty() && supertypes.isEmpty() && subtypes.isEmpty() && !excludedCreatureSubtypes.isEmpty();
+        return coreTypes.isEmpty() && supertypes.isEmpty() && subtypes.isEmpty() && excludedCreatureSubtypes.isEmpty();
     }
 
     @Override
@@ -274,7 +297,7 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
     @Override
     public Set<String> getCreatureTypes() {
         final Set<String> creatureTypes = Sets.newHashSet();
-        if (!isCreature() && !isTribal()) {
+        if (!isCreature() && !isKindred()) {
             return creatureTypes;
         }
         if (hasAllCreatureTypes()) { // it should return list of all creature types
@@ -334,7 +357,7 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
 
     @Override
     public boolean hasAllCreatureTypes() {
-        if (!isCreature() && !isTribal()) { return false; }
+        if (!isCreature() && !isKindred()) { return false; }
         return this.allCreatureTypes;
     }
 
@@ -348,7 +371,7 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
 
     @Override
     public boolean hasCreatureType(String creatureType) {
-        if (!isCreature() && !isTribal()) { return false; }
+        if (!isCreature() && !isKindred()) { return false; }
 
         creatureType = toMixedCase(creatureType);
         if (!isACreatureType(creatureType)) { return false; }
@@ -381,6 +404,10 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
     @Override
     public boolean hasABasicLandType() {
         return Iterables.any(this.subtypes, Predicates.IS_BASIC_LAND_TYPE);
+    }
+    @Override
+    public boolean hasANonBasicLandType() {
+        return !Collections.disjoint(this.subtypes, getNonBasicTypes());
     }
 
     @Override
@@ -479,13 +506,43 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
     }
 
     @Override
-    public boolean isTribal() {
-        return coreTypes.contains(CoreType.Tribal);
+    public boolean isKindred() {
+        return coreTypes.contains(CoreType.Kindred);
     }
 
     @Override
     public boolean isDungeon() {
         return coreTypes.contains(CoreType.Dungeon);
+    }
+
+    @Override
+    public boolean isAttachment() { return isAura() || isEquipment() || isFortification(); }
+    @Override
+    public boolean isAura()           { return hasSubtype("Aura"); }
+    @Override
+    public boolean isEquipment()  { return hasSubtype("Equipment"); }
+    @Override
+    public boolean isFortification()  { return hasSubtype("Fortification"); }
+    public boolean isAttraction() {
+        return hasSubtype("Attraction");
+    }
+
+    @Override
+    public boolean isSaga() {
+        return hasSubtype("Saga");
+    }
+
+    @Override
+    public boolean isHistoric() {
+        return isLegendary() || isArtifact() || isSaga();
+    }
+
+    @Override
+    public boolean isOutlaw() {
+        if (!isCreature() && !isKindred()) {
+            return false;
+        }
+        return !Collections.disjoint(getCreatureTypes(), Constant.OUTLAW_TYPES);
     }
 
     @Override
@@ -591,13 +648,13 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
         if (this.incomplete) {
             return;
         }
-        if (!isCreature() && !isTribal()) {
+        if (!isCreature() && !isKindred()) {
             allCreatureTypes = false;
         }
         if (subtypes.isEmpty()) {
             return;
         }
-        if (!isCreature() && !isTribal()) {
+        if (!isCreature() && !isKindred()) {
             Iterables.removeIf(subtypes, Predicates.IS_CREATURE_TYPE);
         }
         if (!isLand()) {
@@ -664,10 +721,10 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
         if (ctOther == null) {
             return false;
         }
-        if (!isCreature() && !isTribal()) {
+        if (!isCreature() && !isKindred()) {
             return false;
         }
-        if (!ctOther.isCreature() && !ctOther.isTribal()) {
+        if (!ctOther.isCreature() && !ctOther.isKindred()) {
             return false;
         }
 
@@ -722,13 +779,29 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
         if (ctOther == null) {
             return false;
         }
-
         for (final CoreType type : getCoreTypes()) {
             if (ctOther.hasType(type)) {
                 return true;
             }
         }
         return false;
+    }
+
+    public boolean sharesAllCardTypesWith(final CardTypeView ctOther) {
+        if (ctOther == null) {
+            return false;
+        }
+        for (final CoreType type : getCoreTypes()) {
+            if (!ctOther.hasType(type)) {
+                return false;
+            }
+        }
+        for (final CoreType type : ctOther.getCoreTypes()) {
+            if (!this.hasType(type)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean sharesSubtypeWith(final CardTypeView ctOther) {
@@ -744,6 +817,17 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
             }
         }
         return false;
+    }
+
+    public GamePieceType getGamePieceType() {
+        if(this.isAttraction())
+            return GamePieceType.ATTRACTION;
+        for(CoreType type : coreTypes) {
+            GamePieceType r = type.toGamePieceType();
+            if(r != GamePieceType.CARD)
+                return r;
+        }
+        return GamePieceType.CARD;
     }
 
     public static CardType parse(final String typeText, boolean incomplete) {
@@ -814,73 +898,31 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
                 pluralTypes.put(c.name(), c.pluralName);
             }
         }
+
+
+        public static final Set<String> OUTLAW_TYPES = Sets.newHashSet(
+                "Assassin",
+                "Mercenary",
+                "Pirate",
+                "Rogue",
+                "Warlock");
     }
     public static class Predicates {
-        public static Predicate<String> IS_LAND_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isALandType(input);
-            }
-        };
-        public static Predicate<String> IS_BASIC_LAND_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isABasicLandType(input);
-            }
-        };
-        public static Predicate<String> IS_ARTIFACT_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isAnArtifactType(input);
-            }
-        };
+        public static Predicate<String> IS_LAND_TYPE = CardType::isALandType;
+        public static Predicate<String> IS_BASIC_LAND_TYPE = CardType::isABasicLandType;
+        public static Predicate<String> IS_ARTIFACT_TYPE = CardType::isAnArtifactType;
 
-        public static Predicate<String> IS_CREATURE_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isACreatureType(input);
-            }
-        };
+        public static Predicate<String> IS_CREATURE_TYPE = CardType::isACreatureType;
 
-        public static Predicate<String> IS_ENCHANTMENT_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isAnEnchantmentType(input);
-            }
-        };
+        public static Predicate<String> IS_ENCHANTMENT_TYPE = CardType::isAnEnchantmentType;
 
-        public static Predicate<String> IS_SPELL_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isASpellType(input);
-            }
-        };
+        public static Predicate<String> IS_SPELL_TYPE = CardType::isASpellType;
 
-        public static Predicate<String> IS_WALKER_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isAPlaneswalkerType(input);
-            }
-        };
-        public static Predicate<String> IS_DUNGEON_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isADungeonType(input);
-            }
-        };
-        public static Predicate<String> IS_BATTLE_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isABattleType(input);
-            }
-        };
+        public static Predicate<String> IS_WALKER_TYPE = CardType::isAPlaneswalkerType;
+        public static Predicate<String> IS_DUNGEON_TYPE = CardType::isADungeonType;
+        public static Predicate<String> IS_BATTLE_TYPE = CardType::isABattleType;
 
-        public static Predicate<String> IS_PLANAR_TYPE = new Predicate<String>() {
-            @Override
-            public boolean apply(String input) {
-                return CardType.isAPlanarType(input);
-            }
-        };
+        public static Predicate<String> IS_PLANAR_TYPE = CardType::isAPlanarType;
     }
 
     ///////// Utility methods
@@ -924,6 +966,9 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
     public static Collection<String> getBasicTypes() {
         return Collections.unmodifiableCollection(Constant.BASIC_TYPES);
     }
+    public static Collection<String> getNonBasicTypes() {
+        return Collections.unmodifiableCollection(Constant.LAND_TYPES);
+    }
 
     public static Collection<String> getAllCreatureTypes() {
         return Collections.unmodifiableCollection(Constant.CREATURE_TYPES);
@@ -943,7 +988,7 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
     }
 
     public static boolean isASubType(final String cardType) {
-        return (!isASupertype(cardType) && !isACardType(cardType));
+        return getSortedSubTypes().contains(cardType);
     }
 
     public static boolean isAnArtifactType(final String cardType) {
@@ -988,8 +1033,10 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
      * Otherwise, simply return the input.
      * @param type a String.
      * @return the corresponding type.
+     *
+     * @deprecated
      */
-    public static final String getSingularType(final String type) {
+    public static String getSingularType(final String type) {
         if (Constant.singularTypes.containsKey(type)) {
             return Constant.singularTypes.get(type);
         }
@@ -1002,10 +1049,11 @@ public final class CardType implements Comparable<CardType>, CardTypeView {
      * @param type a String.
      * @return the corresponding type.
      */
-    public static final String getPluralType(final String type) {
+    public static String getPluralType(final String type) {
         if (Constant.pluralTypes.containsKey(type)) {
             return Constant.pluralTypes.get(type);
         }
         return type;
     }
+
 }

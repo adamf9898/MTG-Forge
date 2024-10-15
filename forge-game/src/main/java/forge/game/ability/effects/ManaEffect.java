@@ -34,14 +34,15 @@ public class ManaEffect extends SpellAbilityEffect {
         final Card card = sa.getHostCard();
         final AbilityManaPart abMana = sa.getManaPart();
         final List<Player> tgtPlayers = getDefinedPlayersOrTargeted(sa);
+        final Player activator = sa.getActivatingPlayer();
 
         // Spells are not undoable
-        sa.setUndoable(sa.isAbility() && sa.isUndoable() && tgtPlayers.size() < 2);
+        sa.setUndoable(sa.isAbility() && sa.isUndoable() && tgtPlayers.size() < 2 && !sa.hasParam("ActivationLimit"));
 
         final boolean optional = sa.hasParam("Optional");
-        final Game game = sa.getActivatingPlayer().getGame();
+        final Game game = activator.getGame();
 
-        if (optional && !sa.getActivatingPlayer().getController().confirmAction(sa, null, Localizer.getInstance().getMessage("lblDoYouWantAddMana"), null)) {
+        if (optional && !activator.getController().confirmAction(sa, null, Localizer.getInstance().getMessage("lblDoYouWantAddMana"), null)) {
             return;
         }
 
@@ -54,11 +55,14 @@ public class ManaEffect extends SpellAbilityEffect {
 
             if (abMana.isComboMana()) {
                 int amount = sa.hasParam("Amount") ? AbilityUtils.calculateAmount(card, sa.getParam("Amount"), sa) : 1;
+                if(amount <= 0)
+                    continue;
 
                 String express = abMana.getExpressChoice();
                 String[] colorsProduced = abMana.getComboColors(sa).split(" ");
 
                 final StringBuilder choiceString = new StringBuilder();
+                final StringBuilder choiceSymbols = new StringBuilder();
                 ColorSet colorOptions = ColorSet.fromNames(colorsProduced);
                 String[] colorsNeeded = express.isEmpty() ? null : express.split(" ");
                 boolean differentChoice = abMana.getOrigProduced().contains("Different");
@@ -69,12 +73,14 @@ public class ManaEffect extends SpellAbilityEffect {
                     for (Map.Entry<Byte, Integer> e : choices.entrySet()) {
                         Byte chosenColor = e.getKey();
                         String choice = MagicColor.toShortString(chosenColor);
+                        String symbol = MagicColor.toSymbol(chosenColor);
                         Integer count = e.getValue();
                         while (count > 0) {
                             if (choiceString.length() > 0) {
                                 choiceString.append(" ");
                             }
                             choiceString.append(choice);
+                            choiceSymbols.append(symbol);
                             --count;
                         }
                     }
@@ -105,25 +111,26 @@ public class ManaEffect extends SpellAbilityEffect {
                             choiceString.append(" ");
                         }
                         choiceString.append(choice);
+                        choiceSymbols.append(MagicColor.toSymbol(choice));
                         if (sa.hasParam("TwoEach")) {
                             choiceString.append(" ").append(choice);
+                            choiceSymbols.append(MagicColor.toSymbol(choice));
                         }
                     }
                 }
 
                 if (choiceString.toString().isEmpty() && "Combo ColorIdentity".equals(abMana.getOrigProduced())) {
                     // No mana could be produced here (non-EDH match?), so cut short
-                    return;
+                    continue;
                 }
 
-                game.getAction().notifyOfValue(sa, card, Localizer.getInstance().getMessage("lblPlayerPickedChosen", p.getName(), choiceString), p);
+                game.getAction().notifyOfValue(sa, p, choiceSymbols.toString(), p);
                 abMana.setExpressChoice(choiceString.toString());
             }
             else if (abMana.isAnyMana()) {
                 // AI color choice is set in ComputerUtils so only human players need to make a choice
 
                 String colorsNeeded = abMana.getExpressChoice();
-                String choice = "";
 
                 ColorSet colorMenu = null;
                 byte mask = 0;
@@ -136,10 +143,9 @@ public class ManaEffect extends SpellAbilityEffect {
                 if (0 == val) {
                     throw new RuntimeException("ManaEffect::resolve() /*any mana*/ - " + p + " color mana choice is empty for " + card.getName());
                 }
-                choice = MagicColor.toShortString(val);
 
-                game.getAction().notifyOfValue(sa, card, Localizer.getInstance().getMessage("lblPlayerPickedChosen", p.getName(), choice), p);
-                abMana.setExpressChoice(choice);
+                game.getAction().notifyOfValue(sa, card, MagicColor.toSymbol(val), p);
+                abMana.setExpressChoice(MagicColor.toShortString(val));
             }
             else if (abMana.isSpecialMana()) {
                 String type = abMana.getOrigProduced().split("Special ")[1];
@@ -182,7 +188,7 @@ public class ManaEffect extends SpellAbilityEffect {
                     int nMana = 0;
                     for (Object o : card.getRemembered()) {
                         if (o instanceof String) {
-                            sb.append(o.toString());
+                            sb.append(o);
                             nMana++;
                         }
                     }
@@ -192,9 +198,11 @@ public class ManaEffect extends SpellAbilityEffect {
                     abMana.setExpressChoice(sb.toString());
                 } else if (type.startsWith("EachColorAmong")) {
                     final String res = type.split("_")[1];
-                    final ZoneType zone = type.startsWith("EachColorAmong_") ? ZoneType.Battlefield : ZoneType.smartValueOf(type.split("_")[0].substring(14));
-                    final CardCollection list = CardLists.getValidCards(card.getGame().getCardsIn(zone),
-                            res, sa.getActivatingPlayer(), card, sa);
+                    final boolean defined = type.startsWith("EachColorAmongDefined");
+                    final ZoneType zone = defined || type.startsWith("EachColorAmong_") ? ZoneType.Battlefield :
+                            ZoneType.smartValueOf(type.split("_")[0].substring(14));
+                    final CardCollection list = defined ? AbilityUtils.getDefinedCards(card, res, sa) :
+                            CardLists.getValidCards(card.getGame().getCardsIn(zone), res, activator, card, sa);
                     byte colors = 0;
                     for (Card c : list) {
                         colors |= c.getColor().getColor();
@@ -237,7 +245,7 @@ public class ManaEffect extends SpellAbilityEffect {
                 Breadcrumb bread = new Breadcrumb(msg);
                 bread.setData("Card", card.getName());
                 bread.setData("SA", sa.toString());
-                Sentry.addBreadcrumb(bread, sa);
+                Sentry.addBreadcrumb(bread);
 
                 continue;
             }

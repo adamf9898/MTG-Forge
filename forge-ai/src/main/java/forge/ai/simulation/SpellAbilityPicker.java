@@ -12,7 +12,6 @@ import forge.ai.ComputerUtilAbility;
 import forge.ai.ComputerUtilCard;
 import forge.ai.ComputerUtilCost;
 import forge.ai.ability.ChangeZoneAi;
-import forge.ai.ability.ExploreAi;
 import forge.ai.ability.LearnAi;
 import forge.ai.simulation.GameStateEvaluator.Score;
 import forge.game.Game;
@@ -25,7 +24,7 @@ import forge.game.card.CardPredicates;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.spellability.AbilitySub;
-import forge.game.spellability.LandAbility;
+
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityCondition;
 import forge.game.zone.ZoneType;
@@ -35,7 +34,7 @@ public class SpellAbilityPicker {
     private Game game;
     private Player player;
     private Score bestScore;
-    private boolean printOutput;
+    private boolean printOutput = false;
     private SpellAbilityChoicesIterator interceptor;
 
     private Plan plan;
@@ -91,7 +90,7 @@ public class SpellAbilityPicker {
     }
 
     public SpellAbility chooseSpellAbilityToPlay(SimulationController controller) {
-        printOutput = controller == null;
+        //printOutput = controller == null;
 
         // Pass if top of stack is owned by me.
         if (!game.getStack().isEmpty() && game.getStack().peekAbility().getActivatingPlayer().equals(player)) {
@@ -137,7 +136,7 @@ public class SpellAbilityPicker {
 
     private static boolean isSorcerySpeed(SpellAbility sa, Player player) {
         // TODO: Can we use the actual rules engine for this instead of trying to do the logic ourselves?
-        if (sa instanceof LandAbility) {
+        if (sa.isLandAbility()) {
             return true;
         }
         if (sa.isSpell()) {
@@ -163,12 +162,16 @@ public class SpellAbilityPicker {
             List<SpellAbility> candidateSAs2 = new ArrayList<>();
             for (SpellAbility sa : candidateSAs) {
                 if (!isSorcerySpeed(sa, player)) {
-                    System.err.println("Not sorcery: " + sa);
+                    if (printOutput) {
+                        System.err.println("Not sorcery: " + sa);
+                    }
                     candidateSAs2.add(sa);
                 }
             }
             if (!candidateSAs2.isEmpty()) {
-                System.err.println("Formula plan with phase bloom");
+                if (printOutput) {
+                    System.err.println("Formula plan with phase bloom");
+                }
                 Plan afterBlockersPlan = formulatePlanWithPhase(origGameScore, candidateSAs2, PhaseType.COMBAT_DECLARE_BLOCKERS);
                 if (afterBlockersPlan != null && afterBlockersPlan.getFinalScore().value >= bestPlan.getFinalScore().value) {
                     printPlan(afterBlockersPlan, "After blockers");
@@ -324,15 +327,15 @@ public class SpellAbilityPicker {
     }
 
     private AiPlayDecision canPlayAndPayForSim(final SpellAbility sa) {
-        if (!sa.isLegalAfterStack()) {
-            return AiPlayDecision.CantPlaySa;
-        }
         if (!sa.checkRestrictions(sa.getHostCard(), player)) {
             return AiPlayDecision.CantPlaySa;
         }
 
-        if (sa instanceof LandAbility) {
+        if (sa.isLandAbility()) {
             return AiPlayDecision.WillPlay;
+        }
+        if (!sa.isLegalAfterStack()) {
+            return AiPlayDecision.CantPlaySa;
         }
         if (!sa.canPlay()) {
             return AiPlayDecision.CantPlaySa;
@@ -377,6 +380,7 @@ public class SpellAbilityPicker {
             MyRandom.setRandom(new Random(randomSeedToUse));
             GameSimulator simulator = new GameSimulator(controller, game, player, phase);
             simulator.setInterceptor(choicesIterator);
+            // I feel like something here is making a wrong assumption about what the target is
             lastScore = simulator.simulateSpellAbility(sa);
             numSimulations++;
             if (lastScore.value > bestScore.value) {
@@ -390,7 +394,7 @@ public class SpellAbilityPicker {
 
     public List<AbilitySub> chooseModeForAbility(SpellAbility sa, List<AbilitySub> choices, int min, int num, boolean allowRepeat) {
         if (interceptor != null) {
-            return interceptor.chooseModesForAbility(choices, min, num, allowRepeat);
+            return interceptor.chooseModesForAbility(sa, choices, min, num, allowRepeat);
         }
         if (plan != null && plan.getSelectedDecision() != null && plan.getSelectedDecision().modes != null) {
             Plan.Decision decision = plan.getSelectedDecision();
@@ -435,9 +439,7 @@ public class SpellAbilityPicker {
                 return card;
             }
         }
-        if (sa.getApi() == ApiType.Explore) {
-            return ExploreAi.shouldPutInGraveyard(fetchList, decider);
-        } else if (sa.getApi() == ApiType.Learn) {
+        if (sa.getApi() == ApiType.Learn) {
             return LearnAi.chooseCardToLearn(fetchList, decider, sa);
         } else {
             return ChangeZoneAi.chooseCardToHiddenOriginChangeZone(destination, origin, sa, fetchList, player2, decider);
@@ -447,7 +449,7 @@ public class SpellAbilityPicker {
     public CardCollectionView chooseSacrificeType(String type, SpellAbility ability, final boolean effect, int amount, final CardCollectionView exclude) {
         if (amount == 1) {
             Card source = ability.getHostCard();
-            CardCollection cardList = CardLists.getValidCards(player.getCardsIn(ZoneType.Battlefield), type.split(";"), source.getController(), source, null);
+            CardCollection cardList = CardLists.getValidCards(player.getCardsIn(ZoneType.Battlefield), type.split(";"), source.getController(), source, ability);
             cardList = CardLists.filter(cardList, CardPredicates.canBeSacrificedBy(ability, effect));
             if (cardList.size() >= 2) {
                 if (interceptor != null) {

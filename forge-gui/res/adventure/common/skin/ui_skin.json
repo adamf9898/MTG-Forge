@@ -133,6 +133,26 @@
 		"playMode": 2,
 		"crushMode": 0
 	},
+	"unpressedSB-hover10patch": {
+		"region": "unpressedselectbox-hover",
+		"horizontalStretchAreas": [ 3, 10 ],
+		"verticalStretchAreas": [ 11, 12 ],
+		"tiling": true,
+		"minWidth": 22,
+		"minHeight": 16,
+		"rightWidth": 10,
+		"leftWidth": 5,
+		"bottomHeight": 8,
+		"topHeight": 5,
+		"offsetX": 0,
+		"offsetY": 0,
+		"offsetXspeed": 0,
+		"offsetYspeed": 0,
+		"frameDuration": 0.03,
+		"regions": [],
+		"playMode": 2,
+		"crushMode": 0
+	},
 	"unpressed-disable10Patch": {
 		"region": "unpressed-disable",
 		"horizontalStretchAreas": [ 3, 10 ],
@@ -293,6 +313,26 @@
 		"playMode": 2,
 		"crushMode": 0
 	},
+	"unpressedSB10patch": {
+		"region": "unpressedselectbox",
+		"horizontalStretchAreas": [ 3, 10 ],
+		"verticalStretchAreas": [ 11, 12 ],
+		"tiling": true,
+		"minWidth": 22,
+		"minHeight": 16,
+		"rightWidth": 10,
+		"leftWidth": 5,
+		"bottomHeight": 8,
+		"topHeight": 5,
+		"offsetX": 0,
+		"offsetY": 0,
+		"offsetXspeed": 0,
+		"offsetYspeed": 0,
+		"frameDuration": 0.03,
+		"regions": [],
+		"playMode": 2,
+		"crushMode": 0
+	},
 	"Button10Patch": {
 		"region": "9patch17",
 		"horizontalStretchAreas": [ 13, 20, 26, 36 ],
@@ -418,6 +458,11 @@
 		"down": "right_down",
 		"focused": "right_f"
 	},
+	"roundhint": {
+		"up": "unpressedround",
+		"down": "pressedround",
+		"focused": "unpressedround"
+	},
 	"item_frame": {
 		"imageCheckedOver": "item_frame_selected_hover",
 		"up": "item_frame",
@@ -474,7 +519,7 @@
 	"gold": {
 		"background": "9patch4"
 	},
-	"transluscent": {
+	"translucent": {
 		"background": "transwindow10Patch"
 	},
 	"nobg": {
@@ -487,10 +532,11 @@
 		"fontColor": "RGBA_255_255_255_255",
 		"overFontColor": "RGBA_0_216_255_255",
 		"disabledFontColor": "RGBA_255_255_255_255",
-		"background": "unpressed10patch",
+		"background": "unpressedSB10patch",
 		"scrollStyle": "default",
 		"listStyle": "default",
-		"backgroundOver": "unpressed-hover10patch"
+		"backgroundOver": "unpressedSB-hover10patch",
+		"backgroundOpen": "unpressedSB-hover10patch"
 	}
 },
 "SliderStyle": {
@@ -583,7 +629,7 @@
 		"background": "paper10Patch",
 		"titleFont": "default"
 	},
-	"transluscent": {
+	"translucent": {
 		"parent": "default",
 		"background": "transwindow10Patch",
 		"titleFont": "default"

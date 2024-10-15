@@ -17,12 +17,12 @@
  */
 package forge.game.spellability;
 
-import java.util.EnumSet;
-import java.util.Set;
-
 import forge.game.GameType;
 import forge.game.phase.PhaseType;
 import forge.game.zone.ZoneType;
+
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * <p>
@@ -56,6 +56,8 @@ public class SpellAbilityVariables implements Cloneable {
     private Set<PhaseType> phases = EnumSet.noneOf(PhaseType.class);
 
     private boolean firstCombatOnly = false;
+
+    private boolean afterBlockersOnly = false;
 
     /** The GameTypes */
     private Set<GameType> gameTypes = EnumSet.noneOf(GameType.class);
@@ -93,8 +95,7 @@ public class SpellAbilityVariables implements Cloneable {
     private boolean revolt = false;
     private boolean desert = false;
     private boolean blessing = false;
-
-    private boolean allTargetsLegal = false;
+    private boolean solved = false;
 
     /** The s is present. */
     private String isPresent = null;
@@ -136,7 +137,7 @@ public class SpellAbilityVariables implements Cloneable {
     private String lifeAmount = "GE1";
 
     /** The shareAllColors. */
-    private String shareAllColors = null;
+    private String noDifferentColors = null;
 
     /** The mana spent. */
     private String manaSpent = "";
@@ -342,10 +343,9 @@ public class SpellAbilityVariables implements Cloneable {
     public void setDelirium(boolean delirium) {  this.delirium = delirium; }
 
     public void setRevolt(final boolean bRevolt) { revolt = bRevolt; }
-
     public void setDesert(final boolean bDesert) { desert = bDesert; }
-
     public void setBlessing(final boolean bBlessing) { blessing = bBlessing; }
+    public void setSolved(final boolean bSolved) { solved = bSolved; }
 
     /** Optional Costs */
     protected boolean kicked = false;
@@ -357,20 +357,6 @@ public class SpellAbilityVariables implements Cloneable {
     protected boolean surgeCostPaid = false;
     protected boolean bargain = false;
     protected boolean foretold = false;
-
-    /**
-     * @return the allTargetsLegal
-     */
-    public boolean isAllTargetsLegal() {
-        return allTargetsLegal;
-    }
-
-    /**
-     * @param allTargets the allTargetsLegal to set
-     */
-    public void setAllTargetsLegal(boolean allTargets) {
-        this.allTargetsLegal = allTargets;
-    }
 
     // IsPresent for Valid battlefield stuff
 
@@ -550,12 +536,13 @@ public class SpellAbilityVariables implements Cloneable {
     public final boolean isDesert() {     return this.desert;  }
     public final boolean isBlessing() {     return this.blessing;  }
 
-    public String getShareAllColors() {
-        return shareAllColors;
-    }
+    public final boolean isSolved() {     return this.solved;  }
 
-    public void setShareAllColors(String shareAllColors) {
-        this.shareAllColors = shareAllColors;
+    public String getNoDifferentColors() {
+        return noDifferentColors;
+    }
+    public void setNoDifferentColors(String noDifferentColors) {
+        this.noDifferentColors = noDifferentColors;
     }
 
     /**
@@ -636,6 +623,18 @@ public class SpellAbilityVariables implements Cloneable {
     }
     public final boolean setFirstCombatOnly(boolean first) {
         return this.firstCombatOnly = first;
+    }
+
+    /**
+     * Gets the declared blockers.
+     *
+     * @return declared blockers
+     */
+    public final boolean getAfterBlockersOnly() {
+        return this.afterBlockersOnly;
+    }
+    public final boolean setAfterBlockersOnly(boolean first) {
+        return this.afterBlockersOnly = first;
     }
 
     /**

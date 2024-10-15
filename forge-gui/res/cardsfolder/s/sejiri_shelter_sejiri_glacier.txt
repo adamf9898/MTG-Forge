@@ -1,7 +1,7 @@
 Name:Sejiri Shelter
 ManaCost:1 W
 Types:Instant
-A:SP$ Protection | Cost$ 1 W | ValidTgts$ Creature.YouCtrl | TgtPrompt$ Select target creature you control | Gains$ Choice | Choices$ AnyColor | SpellDescription$ Target creature you control gains protection from the color of your choice until end of turn.
+A:SP$ Protection | ValidTgts$ Creature.YouCtrl | TgtPrompt$ Select target creature you control | Gains$ Choice | Choices$ AnyColor | SpellDescription$ Target creature you control gains protection from the color of your choice until end of turn.
 AlternateMode:Modal
 Oracle:Target creature you control gains protection from the color of your choice until end of turn.
 
@@ -10,6 +10,7 @@ ALTERNATE
 Name:Sejiri Glacier
 ManaCost:no cost
 Types:Land
-K:CARDNAME enters the battlefield tapped.
+R:Event$ Moved | ValidCard$ Card.Self | Destination$ Battlefield | ReplacementResult$ Updated | ReplaceWith$ ETBTapped | Description$ CARDNAME enters tapped.
+SVar:ETBTapped:DB$ Tap | Defined$ Self | ETB$ True
 A:AB$ Mana | Cost$ T | Produced$ W | SpellDescription$ Add {W}.
-Oracle:Sejiri Glacier enters the battlefield tapped.\n{T}: Add {W}.
+Oracle:Sejiri Glacier enters tapped.\n{T}: Add {W}.

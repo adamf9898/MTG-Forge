@@ -122,15 +122,12 @@ public abstract class PumpAiBase extends SpellAbilityAi {
                     return false;
                 }
 
-                List<Card> attackers = CardLists.filter(ai.getCreaturesInPlay(), new Predicate<Card>() {
-                    @Override
-                    public boolean apply(final Card c) {
-                        if (c.equals(sa.getHostCard()) && sa.getPayCosts().hasTapCost() 
-                                && (combat == null || !combat.isAttacking(c))) {
-                            return false;
-                        }
-                        return (combat != null && combat.isAttacking(c)) || CombatUtil.canAttack(c, card.getController());
+                List<Card> attackers = CardLists.filter(ai.getCreaturesInPlay(), c -> {
+                    if (c.equals(sa.getHostCard()) && sa.getPayCosts().hasTapCost()
+                            && (combat == null || !combat.isAttacking(c))) {
+                        return false;
                     }
+                    return (combat != null && combat.isAttacking(c)) || CombatUtil.canAttack(c, card.getController());
                 });
                 return CombatUtil.canBlockAtLeastOne(card, attackers);
             }
@@ -140,17 +137,14 @@ public abstract class PumpAiBase extends SpellAbilityAi {
                 return false;
             }
 
-            List<Card> attackers = CardLists.filter(ai.getCreaturesInPlay(), new Predicate<Card>() {
-                @Override
-                public boolean apply(final Card c) {
-                    if (c.equals(sa.getHostCard()) && sa.getPayCosts().hasTapCost() 
-                            && (combat == null || !combat.isAttacking(c))) {
-                        return false;
-                    }
-                    // the cards controller needs to be the one attacked
-                    return (combat != null && combat.isAttacking(c) && card.getController().equals(combat.getDefenderPlayerByAttacker(c))) ||
-                            CombatUtil.canAttack(c, card.getController());
+            List<Card> attackers = CardLists.filter(ai.getCreaturesInPlay(), c -> {
+                if (c.equals(sa.getHostCard()) && sa.getPayCosts().hasTapCost()
+                        && (combat == null || !combat.isAttacking(c))) {
+                    return false;
                 }
+                // the cards controller needs to be the one attacked
+                return (combat != null && combat.isAttacking(c) && card.getController().equals(combat.getDefenderPlayerByAttacker(c))) ||
+                        CombatUtil.canAttack(c, card.getController());
             });
             return CombatUtil.canBlockAtLeastOne(card, attackers);
         } else if (keyword.endsWith("This card doesn't untap during your next untap step.")) {
@@ -368,25 +362,31 @@ public abstract class PumpAiBase extends SpellAbilityAi {
             return ComputerUtil.predictThreatenedObjects(sa.getActivatingPlayer(), sa).contains(card);
         } else if (keyword.equals("Persist")) {
             return card.getBaseToughness() > 1 && !card.hasKeyword(Keyword.UNDYING);
-        } else if (keyword.equals("Islandwalk")) {
+        } else if (keyword.equals("Landwalk:Plains")) {
+            return !ph.isPlayerTurn(opp) && ((combat != null && combat.isAttacking(card)) || CombatUtil.canAttack(card, opp))
+                    && !ph.getPhase().isAfter(PhaseType.COMBAT_DECLARE_ATTACKERS)
+                    && newPower > 0
+                    && !CardLists.getType(opp.getLandsInPlay(), "Plains").isEmpty()
+                    && Iterables.any(opp.getCreaturesInPlay(), CardPredicates.possibleBlockers(card));
+        } else if (keyword.equals("Landwalk:Island")) {
             return !ph.isPlayerTurn(opp) && ((combat != null && combat.isAttacking(card)) || CombatUtil.canAttack(card, opp))
                     && !ph.getPhase().isAfter(PhaseType.COMBAT_DECLARE_ATTACKERS)
                     && newPower > 0
                     && !CardLists.getType(opp.getLandsInPlay(), "Island").isEmpty()
                     && Iterables.any(opp.getCreaturesInPlay(), CardPredicates.possibleBlockers(card));
-        } else if (keyword.equals("Swampwalk")) {
+        } else if (keyword.equals("Landwalk:Swamp")) {
             return !ph.isPlayerTurn(opp) && ((combat != null && combat.isAttacking(card)) || CombatUtil.canAttack(card, opp))
                     && !ph.getPhase().isAfter(PhaseType.COMBAT_DECLARE_ATTACKERS)
                     && newPower > 0
                     && !CardLists.getType(opp.getLandsInPlay(), "Swamp").isEmpty()
                     && Iterables.any(opp.getCreaturesInPlay(), CardPredicates.possibleBlockers(card));
-        } else if (keyword.equals("Mountainwalk")) {
+        } else if (keyword.equals("Landwalk:Mountain")) {
             return !ph.isPlayerTurn(opp) && ((combat != null && combat.isAttacking(card)) || CombatUtil.canAttack(card, opp))
                     && !ph.getPhase().isAfter(PhaseType.COMBAT_DECLARE_ATTACKERS)
                     && newPower > 0
                     && !CardLists.getType(opp.getLandsInPlay(), "Mountain").isEmpty()
                     && Iterables.any(opp.getCreaturesInPlay(), CardPredicates.possibleBlockers(card));
-        } else if (keyword.equals("Forestwalk")) {
+        } else if (keyword.equals("Landwalk:Forest")) {
             return !ph.isPlayerTurn(opp) && ((combat != null && combat.isAttacking(card)) || CombatUtil.canAttack(card, opp))
                     && !ph.getPhase().isAfter(PhaseType.COMBAT_DECLARE_ATTACKERS)
                     && newPower > 0
@@ -410,12 +410,7 @@ public abstract class PumpAiBase extends SpellAbilityAi {
     protected CardCollection getPumpCreatures(final Player ai, final SpellAbility sa, final int defense, final int attack,
             final List<String> keywords, final boolean immediately) {
         CardCollection list = CardLists.getTargetableCards(ai.getCreaturesInPlay(), sa);
-        list = CardLists.filter(list, new Predicate<Card>() {
-            @Override
-            public boolean apply(final Card c) {
-                return ComputerUtilCard.shouldPumpCard(ai, sa, c, defense, attack, keywords, immediately);
-            }
-        });
+        list = CardLists.filter(list, c -> ComputerUtilCard.shouldPumpCard(ai, sa, c, defense, attack, keywords, immediately));
         return list;
     }
 
@@ -443,14 +438,11 @@ public abstract class PumpAiBase extends SpellAbilityAi {
         }
 
         if (defense < 0) { // with spells that give -X/-X, compi will try to destroy a creature
-            list = CardLists.filter(list, new Predicate<Card>() {
-                @Override
-                public boolean apply(final Card c) {
-                    if (c.getSVar("Targeting").equals("Dies") || c.getNetToughness() <= -defense) {
-                        return true; // can kill indestructible creatures
-                    }
-                    return ComputerUtilCombat.getDamageToKill(c, false) <= -defense && !c.hasKeyword(Keyword.INDESTRUCTIBLE);
+            list = CardLists.filter(list, c -> {
+                if (c.getSVar("Targeting").equals("Dies") || c.getNetToughness() <= -defense) {
+                    return true; // can kill indestructible creatures
                 }
+                return ComputerUtilCombat.getDamageToKill(c, false) <= -defense && !c.hasKeyword(Keyword.INDESTRUCTIBLE);
             }); // leaves all creatures that will be destroyed
         } // -X/-X end
         else if (attack < 0 && !game.getReplacementHandler().isPreventCombatDamageThisTurn()) {
@@ -466,18 +458,15 @@ public abstract class PumpAiBase extends SpellAbilityAi {
             } else {
                 // Human active, only curse attacking creatures
                 if (game.getPhaseHandler().getPhase().isBefore(PhaseType.COMBAT_DECLARE_BLOCKERS)) {
-                    list = CardLists.filter(list, new Predicate<Card>() {
-                        @Override
-                        public boolean apply(final Card c) {
-                            if (combat == null || !combat.isAttacking(c)) {
-                                return false;
-                            }
-                            if (c.getNetPower() > 0 && ai.getLife() < 5) {
-                                return true;
-                            }
-                            //Don't waste a -7/-0 spell on a 1/1 creature
-                            return c.getNetPower() + attack > -2 || c.getNetPower() > 3;
+                    list = CardLists.filter(list, c -> {
+                        if (combat == null || !combat.isAttacking(c)) {
+                            return false;
                         }
+                        if (c.getNetPower() > 0 && ai.getLife() < 5) {
+                            return true;
+                        }
+                        //Don't waste a -7/-0 spell on a 1/1 creature
+                        return c.getNetPower() + attack > -2 || c.getNetPower() > 3;
                     });
                 } else {
                     list = new CardCollection();
@@ -495,12 +484,7 @@ public abstract class PumpAiBase extends SpellAbilityAi {
                     }
                 }
 
-                list = CardLists.filter(list, new Predicate<Card>() {
-                    @Override
-                    public boolean apply(final Card c) {
-                        return containsUsefulKeyword(ai, keywords, c, sa, attack);
-                    }
-                });
+                list = CardLists.filter(list, c -> containsUsefulKeyword(ai, keywords, c, sa, attack));
             } else if (sa.hasParam("NumAtt") || sa.hasParam("NumDef")) { 
                 // X is zero
                 list = new CardCollection();

@@ -179,7 +179,7 @@ public class  DamageAllAi extends SpellAbilityAi {
             } else {
                 minGain = 100; // safety for errors in evaluate creature
             }
-        } else if (sa.getSubAbility() != null && ai.getGame().getPhaseHandler().isPreCombatMain() && computerList.isEmpty()
+        } else if (sa.getSubAbility() != null && ai.getGame().getPhaseHandler().is(PhaseType.MAIN1) && computerList.isEmpty()
                 && opp.getCreaturesInPlay().size() > 1 && !ai.getCreaturesInPlay().isEmpty()) {
             minGain = 126; // prepare for attack
         }
@@ -253,12 +253,7 @@ public class  DamageAllAi extends SpellAbilityAi {
         CardCollection list =
                 CardLists.getValidCards(player.getCardsIn(ZoneType.Battlefield), validC, source.getController(), source, sa);
 
-        final Predicate<Card> filterKillable = new Predicate<Card>() {
-            @Override
-            public boolean apply(final Card c) {
-                return ComputerUtilCombat.predictDamageTo(c, dmg, source, false) >= ComputerUtilCombat.getDamageToKill(c, false);
-            }
-        };
+        final Predicate<Card> filterKillable = c -> ComputerUtilCombat.predictDamageTo(c, dmg, source, false) >= ComputerUtilCombat.getDamageToKill(c, false);
 
         list = CardLists.getNotKeyword(list, Keyword.INDESTRUCTIBLE);
         list = CardLists.filter(list, filterKillable);
@@ -274,7 +269,8 @@ public class  DamageAllAi extends SpellAbilityAi {
         final String damage = sa.getParam("NumDmg");
         int dmg;
 
-        if (damage.equals("X") && sa.getSVar(damage).equals("Count$xPaid")) {
+        if (damage.equals("X") && sa.getSVar(damage).equals("Count$xPaid")
+                && sa.getPayCosts() != null && sa.getPayCosts().hasXInAnyCostPart()) {
             // Set PayX here to maximum value.
             dmg = ComputerUtilCost.getMaxXValue(sa, ai, true);
             sa.setXManaCostPaid(dmg);

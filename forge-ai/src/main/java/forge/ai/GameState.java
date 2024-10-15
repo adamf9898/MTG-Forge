@@ -7,6 +7,7 @@ import com.google.common.collect.Multimap;
 import forge.StaticData;
 import forge.card.CardEdition;
 import forge.card.CardStateName;
+import forge.card.GamePieceType;
 import forge.card.MagicColor;
 import forge.card.mana.ManaAtom;
 import forge.game.Game;
@@ -292,6 +293,12 @@ public abstract class GameState {
             if (c.isRenowned()) {
                 newText.append("|Renowned");
             }
+            if (c.isSolved()) {
+                newText.append("|Solved");
+            }
+            if (c.isSuspected()) {
+                newText.append("|Suspected");
+            }
             if (c.isMonstrous()) {
                 newText.append("|Monstrous");
             }
@@ -303,6 +310,9 @@ public abstract class GameState {
                 newText.append("|FaceDown");
                 if (c.isManifested()) {
                     newText.append(":Manifested");
+                }
+                if (c.isCloaked()) {
+                    newText.append(":Cloaked");
                 }
             }
             if (c.getCurrentStateName().equals(CardStateName.Transformed)) {
@@ -381,6 +391,10 @@ public abstract class GameState {
                 }
                 newText.append("|MergedCards:").append(TextUtil.join(mergedCardNames, ","));
             }
+
+            if (c.getClassLevel() > 1) {
+                newText.append("|ClassLevel:").append(c.getClassLevel());
+            }
         }
 
         if (zoneType == ZoneType.Exile) {
@@ -397,11 +411,10 @@ public abstract class GameState {
             }
             if (c.isForetold()) {
                 newText.append("|Foretold");
+                if (c.enteredThisTurn()) {
+                    newText.append("|ForetoldThisTurn");
+                }
             }
-            if (c.isForetoldThisTurn()) {
-                newText.append("|ForetoldThisTurn");
-            }
-
         }
 
         if (zoneType == ZoneType.Battlefield || zoneType == ZoneType.Exile) {
@@ -614,6 +627,7 @@ public abstract class GameState {
         }
 
         game.getStack().setResolving(false);
+        game.getStack().unfreezeStack();
 
         // Advance to a certain phase, activating all triggered abilities
         if (advPhase != null) {
@@ -630,6 +644,9 @@ public abstract class GameState {
 
         // prevent interactions with objects from old state
         game.copyLastState();
+
+        // Store snapshot for restoring
+        game.stashGameState();
 
         // Set negative or zero life after state effects if need be, important for some puzzles that rely on
         // pre-setting negative life (e.g. PS_NEO4).
@@ -1149,7 +1166,7 @@ public abstract class GameState {
                         // (will be overridden later, so the actual value shouldn't matter)
 
                         //FIXME it shouldn't be able to attach itself
-                        c.setEntityAttachedTo(CardFactory.copyCard(c, true));
+                        c.setEntityAttachedTo(new CardCopyService(c).copyCard(true));
                     }
 
                     if (cardsWithoutETBTrigs.contains(c)) {
@@ -1167,9 +1184,8 @@ public abstract class GameState {
                 zone.setCards(kv.getValue());
             }
         }
-        for (Card cmd : p.getCommanders()) {
-            p.getZone(ZoneType.Command).add(Player.createCommanderEffect(p.getGame(), cmd));
-        }
+        if (!p.getCommanders().isEmpty())
+            p.createCommanderEffect(); //Original one was lost, and the one made by addCommander would have been erased by setCards.
 
         updateManaPool(p, state.manaPool, true, false);
         updateManaPool(p, state.persistentMana, false, true);
@@ -1257,6 +1273,12 @@ public abstract class GameState {
                     c.tap(false, null, null);
                 } else if (info.startsWith("Renowned")) {
                     c.setRenowned(true);
+                } else if (info.startsWith("Solved")) {
+                    c.setSolved(true);
+                } else if (info.startsWith("Saddled")) {
+                    c.setSaddled(true);
+                } else if (info.startsWith("Suspected")) {
+                    c.setSuspected(true);
                 } else if (info.startsWith("Monstrous")) {
                     c.setMonstrous(true);
                 } else if (info.startsWith("PhasedOut")) {
@@ -1270,6 +1292,9 @@ public abstract class GameState {
                     c.turnFaceDown(true);
                     if (info.endsWith("Manifested")) {
                         c.setManifested(true);
+                    }
+                    if (info.endsWith("Cloaked")) {
+                        c.setCloaked(true);
                     }
                 } else if (info.startsWith("Transformed")) {
                     c.setState(CardStateName.Transformed, true);
@@ -1295,7 +1320,7 @@ public abstract class GameState {
                     c.setBackSide(true);
                 }
                 else if (info.startsWith("OnAdventure")) {
-                    String abAdventure = "DB$ Effect | RememberObjects$ Self | StaticAbilities$ Play | ForgetOnMoved$ Exile | Duration$ Permanent | ConditionDefined$ Self | ConditionPresent$ Card.nonCopiedSpell";
+                    String abAdventure = "DB$ Effect | RememberObjects$ Self | StaticAbilities$ Play | ForgetOnMoved$ Exile | Duration$ Permanent | ConditionDefined$ Self | ConditionPresent$ Card.!copiedSpell";
                     SpellAbility saAdventure = AbilityFactory.getAbility(abAdventure, c);
                     StringBuilder sbPlay = new StringBuilder();
                     sbPlay.append("Mode$ Continuous | MayPlay$ True | EffectZone$ Command | Affected$ Card.IsRemembered+nonAdventure");
@@ -1306,10 +1331,7 @@ public abstract class GameState {
                     c.setExiledWith(c); // This seems to be the way it's set up internally. Potentially not needed here?
                     c.setExiledBy(c.getController());
                 } else if (info.startsWith("IsCommander")) {
-                    c.setCommander(true);
-                    List<Card> cmd = Lists.newArrayList(player.getCommanders());
-                    cmd.add(c);
-                    player.setCommanders(cmd);
+                    player.addCommander(c);
                 } else if (info.startsWith("IsRingBearer")) {
                     c.setRingBearer(true);
                     player.setRingBearer(c);
@@ -1374,9 +1396,11 @@ public abstract class GameState {
                     c.turnFaceDown(true);
                     c.addMayLookTemp(c.getOwner());
                 } else if (info.equals("ForetoldThisTurn")) {
-                    c.setForetoldThisTurn(true);
+                    c.setTurnInZone(turn);
                 } else if (info.equals("IsToken")) {
-                    c.setToken(true);
+                    c.setGamePieceType(GamePieceType.TOKEN);
+                } else if (info.startsWith("ClassLevel:")) {
+                    c.setClassLevel(Integer.parseInt(info.substring(info.indexOf(':') + 1)));
                 }
             }
 

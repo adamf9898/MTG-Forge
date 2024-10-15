@@ -3,7 +3,6 @@ package forge.game.card;
 import java.util.Map;
 
 import com.google.common.collect.ForwardingMap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
@@ -34,14 +33,14 @@ public final class CardChangedWords extends ForwardingMap<String, String> {
     }
 
     public Long addEmpty(final long timestamp, final long staticId) {
-        final Long stamp = Long.valueOf(timestamp);
+        final Long stamp = timestamp;
         map.put(stamp, staticId, new WordHolder()); // Table doesn't allow null value
         isDirty = true;
         return stamp;
     }
 
     public Long add(final long timestamp, final long staticId, final String originalWord, final String newWord) {
-        final Long stamp = Long.valueOf(timestamp);
+        final Long stamp = timestamp;
         map.put(stamp, staticId, new WordHolder(originalWord, newWord));
         isDirty = true;
         return stamp;
@@ -100,12 +99,6 @@ public final class CardChangedWords extends ForwardingMap<String, String> {
                 resultCache.put(ccw.oldWord, ccw.newWord);
             }
 
-            // TODO should that be removed?
-            for (final String key : ImmutableList.copyOf(resultCache.keySet())) {
-                if (!key.equals("Any")) {
-                    resultCache.put(key.toLowerCase(), resultCache.get(key).toLowerCase());
-                }
-            }
             isDirty = false;
         }
     }

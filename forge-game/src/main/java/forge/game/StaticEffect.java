@@ -56,7 +56,7 @@ public class StaticEffect {
         this.ability = ability;
     }
 
-    private StaticEffect makeMappedCopy(GameObjectMap map) {
+    private StaticEffect makeMappedCopy(IEntityMap map) {
         StaticEffect copy = new StaticEffect(map.map(this.source));
         copy.ability = this.ability;
         copy.affectedCards = map.mapCollection(this.affectedCards);
@@ -101,7 +101,7 @@ public class StaticEffect {
      * Getter for the field <code>affectedCards</code>.
      * </p>
      *
-     * @return a {@link forge.CardList} object.
+     * @return a {@link CardCollectionView} object.
      */
     public final CardCollectionView getAffectedCards() {
         return affectedCards;
@@ -113,7 +113,7 @@ public class StaticEffect {
      * </p>
      *
      * @param list
-     *            a {@link forge.CardList} object.
+     *            a {@link CardCollectionView} object.
      */
     public final void setAffectedCards(final CardCollectionView list) {
         affectedCards = list;
@@ -197,6 +197,10 @@ public class StaticEffect {
             p.removeControlVote(getTimestamp());
             p.removeAdditionalVote(getTimestamp());
             p.removeAdditionalOptionalVote(getTimestamp());
+            p.removeAdditionalVillainousChoices(getTimestamp());
+
+            p.removeDeclaresAttackers(getTimestamp());
+            p.removeDeclaresBlockers(getTimestamp());
         }
 
         // modify the affected card
@@ -233,9 +237,11 @@ public class StaticEffect {
             }
 
             // remove abilities
-            if (hasParam("AddAbility") || hasParam("GainsAbilitiesOf") || hasParam("GainsAbilitiesOfDefined")
-                    || hasParam("AddTrigger") || hasParam("AddStaticAbility") || hasParam("AddReplacementEffects")
-                    || hasParam("RemoveAllAbilities") || hasParam("RemoveLandTypes")) {
+            if (hasParam("AddAbility") || hasParam("GainsAbilitiesOf")
+                    || hasParam("GainsAbilitiesOfDefined") || hasParam("GainsTriggerAbsOf")
+                    || hasParam("AddTrigger") || hasParam("AddStaticAbility")
+                    || hasParam("AddReplacementEffects") || hasParam("RemoveAllAbilities")
+                    || hasParam("RemoveLandTypes")) {
                 affectedCard.removeChangedCardTraits(getTimestamp(), ability.getId());
             }
 
@@ -287,11 +293,13 @@ public class StaticEffect {
             }
 
             affectedCard.removeChangedSVars(getTimestamp(), ability.getId());
+
+            affectedCard.updateAbilityTextForView(); // need to update keyword cache for clean reapply
         }
         return affectedCards;
     }
 
-    public void removeMapped(GameObjectMap map) {
+    public void removeMapped(IEntityMap map) {
         makeMappedCopy(map).remove();
     }
 

@@ -29,12 +29,10 @@ import com.google.common.collect.Lists;
 import forge.card.mana.ManaAtom;
 import forge.card.mana.ManaCostShard;
 import forge.game.Game;
-import forge.game.GlobalRuleChange;
 import forge.game.ability.AbilityKey;
 import forge.game.cost.CostPayment;
 import forge.game.event.EventValueChangeType;
 import forge.game.event.GameEventManaPool;
-import forge.game.event.GameEventZone;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.replacement.ReplacementLayer;
@@ -42,7 +40,6 @@ import forge.game.replacement.ReplacementType;
 import forge.game.spellability.AbilityManaPart;
 import forge.game.spellability.SpellAbility;
 import forge.game.staticability.StaticAbilityUnspentMana;
-import forge.game.zone.ZoneType;
 
 /**
  * <p>
@@ -112,7 +109,12 @@ public class ManaPool extends ManaConversionMatrix implements Iterable<Mana> {
 
     public final boolean hasBurn() {
         final Game game = owner.getGame();
-        return game.getRules().hasManaBurn() || game.getStaticEffects().getGlobalRuleChange(GlobalRuleChange.manaBurn);
+        return game.getRules().hasManaBurn() || StaticAbilityUnspentMana.hasManaBurn(owner);
+    }
+
+    public final void resetPool() {
+        // This should only be used to reset the pool to empty by things like restores.
+        floatingMana.clear();
     }
 
     public final List<Mana> clearPool(boolean isEndOfPhase) {
@@ -185,17 +187,12 @@ public class ManaPool extends ManaConversionMatrix implements Iterable<Mana> {
         return removeMana(mana, true);
     }
     public boolean removeMana(final Mana mana, boolean updateView) {
-        boolean success = false;
-        // make sure to remove the most recent in case of rollback
-        int lastIdx = floatingMana.get(mana.getColor()).lastIndexOf(mana);
-        if (lastIdx != -1) {
-            success = floatingMana.get(mana.getColor()).remove(lastIdx) != null;
-        }
-        if (success && updateView) {
+        boolean result = floatingMana.remove(mana.getColor(), mana);
+        if (result && updateView) {
             owner.updateManaForView();
             owner.getGame().fireEvent(new GameEventManaPool(owner, EventValueChangeType.Removed, mana));
         }
-        return success;
+        return result;
     }
 
     public final void payManaFromAbility(final SpellAbility saPaidFor, ManaCostBeingPaid manaCost, final SpellAbility saPayment) {
@@ -299,39 +296,9 @@ public class ManaPool extends ManaConversionMatrix implements Iterable<Mana> {
         return true;
     }
 
-    public static void refundMana(List<Mana> manaSpent, Player player, SpellAbility sa) {
-        player.getManaPool().add(manaSpent);
+    public void refundMana(List<Mana> manaSpent) {
+        add(manaSpent);
         manaSpent.clear();
-    }
-
-    public final void refundManaPaid(final SpellAbility sa) {
-        Player p = sa.getActivatingPlayer();
-
-        // Send all mana back to your mana pool, before accounting for it.
-
-        // move non-undoable paying mana back to floating
-        refundMana(sa.getPayingMana(), owner, sa);
-
-        List<SpellAbility> payingAbilities = sa.getPayingManaAbilities();
-
-        // start with the most recent
-        Collections.reverse(payingAbilities);
-
-        for (final SpellAbility am : payingAbilities) {
-            // undo paying abilities if we can
-            am.undo();
-        }
-
-        for (final SpellAbility am : payingAbilities) {
-            // Recursively refund abilities that were used.
-            refundManaPaid(am);
-            p.getGame().getStack().clearUndoStack(am);
-        }
-
-        payingAbilities.clear();
-
-        // update battlefield of activating player - to redraw cards used to pay mana as untapped
-        p.getGame().fireEvent(new GameEventZone(ZoneType.Battlefield, p, EventValueChangeType.ComplexUpdate, null));
     }
 
     public boolean canPayForShardWithColor(ManaCostShard shard, byte color) {
@@ -359,8 +326,7 @@ public class ManaPool extends ManaConversionMatrix implements Iterable<Mana> {
      * @param manaSpentToPay list of mana spent
      * @return whether the floating mana is sufficient to pay the cost fully
      */
-    public static boolean payManaCostFromPool(final ManaCostBeingPaid cost, final SpellAbility sa, final Player player,
-            final boolean test, List<Mana> manaSpentToPay) {
+    public boolean payManaCostFromPool(final ManaCostBeingPaid cost, final SpellAbility sa, final boolean test, List<Mana> manaSpentToPay) {
         final boolean hasConverge = sa.getHostCard().hasConverge();
         List<ManaCostShard> unpaidShards = cost.getUnpaidShards();
         Collections.sort(unpaidShards); // most difficult shards must come first
@@ -371,9 +337,9 @@ public class ManaPool extends ManaConversionMatrix implements Iterable<Mana> {
                 }
 
                 // get a mana of this type from floating, bail if none available
-                final Mana mana = CostPayment.getMana(player, part, sa, hasConverge ? cost.getColorsPaid() : -1, cost.getXManaCostPaidByColor());
+                final Mana mana = CostPayment.getMana(owner, part, sa, hasConverge ? cost.getColorsPaid() : -1, cost.getXManaCostPaidByColor());
                 if (mana != null) {
-                    if (player.getManaPool().tryPayCostWithMana(sa, cost, mana, test)) {
+                    if (tryPayCostWithMana(sa, cost, mana, test)) {
                         manaSpentToPay.add(mana);
                     }
                 }
@@ -383,9 +349,8 @@ public class ManaPool extends ManaConversionMatrix implements Iterable<Mana> {
         if (cost.isPaid()) {
             // refund any mana taken from mana pool when test
             if (test) {
-                refundMana(manaSpentToPay, player, sa);
+                refundMana(manaSpentToPay);
             }
-            CostPayment.handleOfferings(sa, test, cost.isPaid());
             return true;
         }
         return false;

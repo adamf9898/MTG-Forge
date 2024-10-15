@@ -64,9 +64,10 @@ public class WorldStage extends GameStage implements SaveFileContent {
     final Rectangle tempBoundingRect = new Rectangle();
     final Vector2 enemyMoveVector = new Vector2();
 
+    boolean collided = false;
     @Override
     protected void onActing(float delta) {
-        if (isPaused() || MapStage.getInstance().isDialogOnlyInput())
+        if (isPaused() || MapStage.getInstance().isDialogOnlyInput() || Forge.advFreezePlayerControls)
             return;
         drawNavigationArrow();
         if (player.isMoving()) {
@@ -110,6 +111,9 @@ public class WorldStage extends GameStage implements SaveFileContent {
                 }
 
                 if (player.collideWith(mob)) {
+                    if (collided)
+                        return;
+                    collided = true;
                     player.setAnimation(CharacterSprite.AnimationTypes.Attack);
                     player.playEffect(Paths.EFFECT_SPARKS, 0.5f);
                     mob.setAnimation(CharacterSprite.AnimationTypes.Attack);
@@ -118,7 +122,7 @@ public class WorldStage extends GameStage implements SaveFileContent {
                     int duration = mob.getData().boss ? 400 : 200;
                     if (Controllers.getCurrent() != null && Controllers.getCurrent().canVibrate())
                         Controllers.getCurrent().startVibration(duration, 1);
-                    Forge.restrictAdvMenus = true;
+                    Forge.advFreezePlayerControls = true;
                     player.clearCollisionHeight();
                     startPause(0.8f, () -> {
                         Forge.setCursor(null, Forge.magnifyToggle ? "1" : "2");
@@ -126,6 +130,7 @@ public class WorldStage extends GameStage implements SaveFileContent {
                         DuelScene duelScene = DuelScene.instance();
                         FThreads.invokeInEdtNowOrLater(() -> {
                             Forge.setTransitionScreen(new TransitionScreen(() -> {
+                                collided = false;
                                 duelScene.initDuels(player, mob);
                                 Forge.switchScene(duelScene);
                             }, Forge.takeScreenshot(), true, false, false, false, "", Current.player().avatar(), mob.getAtlasPath(), Current.player().getName(), mob.getName()));
@@ -183,11 +188,14 @@ public class WorldStage extends GameStage implements SaveFileContent {
             currentMob.setAnimation(CharacterSprite.AnimationTypes.Attack);
             startPause(0.5f, () -> {
                 currentMob.resetCollisionHeight();
-                Current.player().defeated();
+                boolean defeated = Current.player().defeated();
                 AdventureQuestController.instance().updateQuestsLose(currentMob);
                 AdventureQuestController.instance().showQuestDialogs(MapStage.getInstance());
                 WorldStage.this.removeEnemy(currentMob);
                 currentMob = null;
+                if (defeated) {
+                    WorldStage.getInstance().resetPlayerLocation();
+                }
             });
         }
     }
@@ -204,22 +212,27 @@ public class WorldStage extends GameStage implements SaveFileContent {
                     if (point == collidingPoint) {
                         continue;
                     }
-                    try {
-                        WorldSave.getCurrentSave().autoSave();
-                        TileMapScene.instance().load(point.getPointOfInterest());
-                        stop();
-                        Forge.switchScene(TileMapScene.instance());
-                        point.getMapSprite().checkOut();
-                    } catch (Exception e) {
-                        System.err.println("Error loading map...");
-                        e.printStackTrace();
-                    }
+                    WorldSave.getCurrentSave().autoSave();
+                    loadPOI(point.getPointOfInterest());
+                    point.getMapSprite().checkOut();
                 } else {
                     if (point == collidingPoint) {
                         collidingPoint = null;
                     }
                 }
             }
+        }
+    }
+
+    public void loadPOI(PointOfInterest poi) {
+        try {
+            TileMapScene.instance().load(poi);
+            stop();
+            TileMapScene.instance().setFromWorldMap(true);
+            Forge.switchScene(TileMapScene.instance());
+        } catch (Exception e) {
+            System.err.println("Error loading map...");
+            e.printStackTrace();
         }
     }
 
@@ -268,7 +281,24 @@ public class WorldStage extends GameStage implements SaveFileContent {
         if (list == null)
             return;
         EnemyData enemyData = data.getEnemy(1.0f);
-        spawn(enemyData);
+        EnemyData extraSpawnForQuests = data.getExtraSpawnEnemy(1.0f);
+        if (extraSpawnForQuests != null) {
+            float spawnPicker = rand.nextFloat();
+
+            if (spawnPicker > 0.5f) //todo: make this difficulty dependent, more enemies on harder difficulty
+            {
+                spawn(enemyData);
+                spawn(extraSpawnForQuests);
+            }
+            else if (spawnPicker > 0.2f) {
+                spawn(extraSpawnForQuests);
+            }
+            else {
+                spawn(enemyData);
+            }
+
+        }
+        else spawn(enemyData);
     }
 
     private boolean spawn(EnemySprite sprite){
@@ -390,6 +420,8 @@ public class WorldStage extends GameStage implements SaveFileContent {
     public void load(SaveFileData data) {
         try {
             clearCache();
+            MapStage.getInstance().clearIsInMap();
+            GameHUD.getInstance().clearNotifications();
             List<Float> timeouts = (List<Float>) data.readObject("timeouts");
             List<String> names = (List<String>) data.readObject("names");
             List<Float> x = (List<Float>) data.readObject("x");
@@ -471,17 +503,19 @@ public class WorldStage extends GameStage implements SaveFileContent {
         for (AdventureQuestData adq: Current.player().getQuests())
         {
             if (adq.isTracked) {
-                if (adq.getTargetPOI() != null) {
-                    navDirection = adq.getTargetPOI().getNavigationVector(player.pos());
+                PointOfInterest nearestValidPOI = adq.getClosestValidPOI(player.pos());
+                if (nearestValidPOI != null) {
+                    navDirection = new Vector2(nearestValidPOI.getPosition()).sub(player.pos());
+                    break;
+                }
 
-                } else if (adq.getTargetEnemySprite() != null) {
+                if (adq.getTargetEnemySprite() != null) {
                     EnemySprite target = adq.getTargetEnemySprite();
                     for (Pair<Float, EnemySprite> active :enemies)
                     {
                         EnemySprite sprite = active.getValue();
                         if (sprite.equals(target)){
-                            navDirection = new Vector2(adq.getTargetEnemySprite().pos()).sub(player.getX(), player.getY());
-                            break;
+                            navDirection = new Vector2(adq.getTargetEnemySprite().pos()).sub(player.pos());
                         }
                     }
                 }

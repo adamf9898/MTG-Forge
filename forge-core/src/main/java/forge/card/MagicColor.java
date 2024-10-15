@@ -1,6 +1,5 @@
 package forge.card;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 
 /**
@@ -107,6 +106,14 @@ public final class MagicColor {
         }
     }
 
+    public static String toSymbol(final byte color) {
+        return MagicColor.Color.fromByte(color).getSymbol();
+    }
+
+    public static String toSymbol(final String color) {
+        return toSymbol(fromName(color));
+    }
+
     /**
      * The Interface Color.
      */
@@ -166,6 +173,17 @@ public final class MagicColor {
             symbol = symbol0;
         }
 
+        public static Color fromByte(final byte color) {
+            switch (color) {
+                case MagicColor.WHITE: return WHITE;
+                case MagicColor.BLUE: return BLUE;
+                case MagicColor.BLACK: return BLACK;
+                case MagicColor.RED: return RED;
+                case MagicColor.GREEN: return GREEN;
+                default: return COLORLESS;
+            }
+        }
+
         public String getName() {
             return name;
         }
@@ -181,10 +199,4 @@ public final class MagicColor {
         }
     }
 
-    public static final Function<Color, String> FN_GET_SYMBOL = new Function<Color, String>() {
-        @Override
-        public String apply(final Color color) {
-            return color.symbol;
-        }
-    };
 }

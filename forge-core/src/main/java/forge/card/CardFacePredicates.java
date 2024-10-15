@@ -67,12 +67,9 @@ public final class CardFacePredicates {
     }
 
     public static Predicate<ICardFace> cmc(final int value) {
-        return new Predicate<ICardFace>() {
-            @Override
-            public boolean apply(ICardFace input) {
-                ManaCost cost = input.getManaCost();
-                return cost != null && cost.getCMC() == value;
-            }
+        return input -> {
+            ManaCost cost = input.getManaCost();
+            return cost != null && cost.getCMC() == value;
         };
     }
 
@@ -103,6 +100,9 @@ public final class CardFacePredicates {
                         if (!hasManaCost(input, manaCost)) {
                             return false;
                         }
+                    } else if (m.contains("cmcEQ")) {
+                        int i = Integer.parseInt(m.substring(5));
+                        if (!hasCMC(input, i)) return false;
                     } else if (!hasProperty(input, m)) {
                         return false;
                     }
@@ -122,6 +122,11 @@ public final class CardFacePredicates {
             return mC.equals(input.getManaCost().getShortString());
         }
 
+        static protected boolean hasCMC(ICardFace input, final int value) {
+            ManaCost cost = input.getManaCost();
+            return cost != null && cost.getCMC() == value;
+        }
+
     }
 
     public static Predicate<ICardFace> valid(final String val) {
@@ -130,20 +135,10 @@ public final class CardFacePredicates {
 
     public static class Presets {
         /** The Constant isBasicLand. */
-        public static final Predicate<ICardFace> IS_BASIC_LAND = new Predicate<ICardFace>() {
-            @Override
-            public boolean apply(final ICardFace subject) {
-                return subject.getType().isBasicLand();
-            }
-        };
+        public static final Predicate<ICardFace> IS_BASIC_LAND = subject -> subject.getType().isBasicLand();
 
         /** The Constant isNonBasicLand. */
-        public static final Predicate<ICardFace> IS_NONBASIC_LAND = new Predicate<ICardFace>() {
-            @Override
-            public boolean apply(final ICardFace subject) {
-                return subject.getType().isLand() && !subject.getType().isBasicLand();
-            }
-        };
+        public static final Predicate<ICardFace> IS_NONBASIC_LAND = subject -> subject.getType().isLand() && !subject.getType().isBasicLand();
 
         /** The Constant isCreature. */
         public static final Predicate<ICardFace> IS_CREATURE = CardFacePredicates

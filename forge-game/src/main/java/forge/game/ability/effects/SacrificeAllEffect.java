@@ -3,19 +3,12 @@ package forge.game.ability.effects;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.collect.Maps;
-
 import forge.game.Game;
 import forge.game.GameActionUtil;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.AbilityUtils;
 import forge.game.ability.SpellAbilityEffect;
-import forge.game.card.Card;
-import forge.game.card.CardCollection;
-import forge.game.card.CardCollectionView;
-import forge.game.card.CardLists;
-import forge.game.card.CardUtil;
-import forge.game.card.CardZoneTable;
+import forge.game.card.*;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.ZoneType;
@@ -45,13 +38,13 @@ public class SacrificeAllEffect extends SpellAbilityEffect {
 
     @Override
     public void resolve(SpellAbility sa) {
-        final Card card = sa.getHostCard();
+        final Card host = sa.getHostCard();
         final Player activator = sa.getActivatingPlayer();
         final Game game = activator.getGame();
 
         CardCollectionView list;
         if (sa.hasParam("Defined")) {
-            list = AbilityUtils.getDefinedCards(card, sa.getParam("Defined"), sa);
+            list = AbilityUtils.getDefinedCards(host, sa.getParam("Defined"), sa);
         } else {
             list = game.getCardsIn(ZoneType.Battlefield);
             if (sa.hasParam("ValidCards")) {
@@ -61,7 +54,7 @@ public class SacrificeAllEffect extends SpellAbilityEffect {
 
         final boolean remSacrificed = sa.hasParam("RememberSacrificed");
         if (remSacrificed) {
-            card.clearRemembered();
+            host.clearRemembered();
         }
 
         // update cards that where using LKI
@@ -82,23 +75,20 @@ public class SacrificeAllEffect extends SpellAbilityEffect {
 
         list = GameActionUtil.orderCardsByTheirOwners(game, list, ZoneType.Graveyard, sa);
 
-        CardZoneTable table = new CardZoneTable();
-        Map<Integer, Card> cachedMap = Maps.newHashMap();
         Map<AbilityKey, Object> params = AbilityKey.newMap();
-        params.put(AbilityKey.LastStateBattlefield, game.copyLastStateBattlefield());
+        CardZoneTable zoneMovements = AbilityKey.addCardZoneTableParams(params, sa);
 
-        for (Card sac : list) {
-            final Card lKICopy = CardUtil.getLKICopy(sac, cachedMap);
-            if (game.getAction().sacrifice(sac, sa, true, table, params) != null) {
-                if (remSacrificed) {
-                    card.addRemembered(lKICopy);
-                }
-                if (sa.hasParam("ImprintSacrificed")) {
-                    card.addImprintedCard(lKICopy);
-                }
+        for (Card sac : game.getAction().sacrifice(list, sa, true, params)) {
+            final Card lKICopy = zoneMovements.getLastStateBattlefield().get(sac);
+            if (remSacrificed) {
+                host.addRemembered(lKICopy);
+            }
+            if (sa.hasParam("ImprintSacrificed")) {
+                host.addImprintedCard(lKICopy);
             }
         }
-        table.triggerChangesZoneAll(game, sa);
+
+        zoneMovements.triggerChangesZoneAll(game, sa);
     }
 
 }

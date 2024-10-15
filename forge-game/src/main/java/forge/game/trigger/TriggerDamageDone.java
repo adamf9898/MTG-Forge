@@ -21,7 +21,7 @@ import java.util.Map;
 
 import forge.game.ability.AbilityKey;
 import forge.game.card.Card;
-import forge.game.card.CardUtil;
+import forge.game.card.CardCopyService;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.util.Expressions;
@@ -54,7 +54,8 @@ public class TriggerDamageDone extends Trigger {
     }
 
     /** {@inheritDoc}
-     * @param runParams*/
+     * @param runParams
+     */
     @Override
     public final boolean performTest(final Map<AbilityKey, Object> runParams) {
         if (!matchesValidParam("ValidSource", runParams.get(AbilityKey.DamageSource))) {
@@ -83,11 +84,20 @@ public class TriggerDamageDone extends Trigger {
             }
         }
 
+        if (!matchesValidParam("TargetRelativeToSource", runParams.get(AbilityKey.DamageTarget),
+                (Card) runParams.get(AbilityKey.DamageSource))) {
+            return false;
+        }
+
         if (hasParam("DamageAmount")) {
             final String fullParam = getParam("DamageAmount");
 
             final String operator = fullParam.substring(0, 2);
-            final int operand = Integer.parseInt(fullParam.substring(2));
+            int operand;
+            if (fullParam.substring(2).equals("TargetToughness")) {
+                final Card target = (Card) runParams.get(AbilityKey.DamageTarget);
+                operand = target.getNetToughness();
+            } else operand = Integer.parseInt(fullParam.substring(2));
             final int actualAmount = (Integer) runParams.get(AbilityKey.DamageAmount);
 
             if (!Expressions.compare(actualAmount, operator, operand)) {
@@ -120,7 +130,7 @@ public class TriggerDamageDone extends Trigger {
     @Override
     public final void setTriggeringObjects(final SpellAbility sa, Map<AbilityKey, Object> runParams) {
         // TODO try to reuse LKI of CardDamageHistory.registerDamage
-        sa.setTriggeringObject(AbilityKey.Source, CardUtil.getLKICopy((Card)runParams.get(AbilityKey.DamageSource)));
+        sa.setTriggeringObject(AbilityKey.Source, CardCopyService.getLKICopy((Card)runParams.get(AbilityKey.DamageSource)));
         sa.setTriggeringObject(AbilityKey.Target, runParams.get(AbilityKey.DamageTarget));
         sa.setTriggeringObjectsFrom(
             runParams,

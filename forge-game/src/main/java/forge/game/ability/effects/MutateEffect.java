@@ -1,12 +1,11 @@
 package forge.game.ability.effects;
 
 import java.util.HashMap;
-import java.util.List;
 
 import com.google.common.collect.Lists;
 
+import forge.card.GamePieceType;
 import forge.game.Game;
-import forge.game.GameObject;
 import forge.game.ability.AbilityKey;
 import forge.game.ability.SpellAbilityEffect;
 import forge.game.card.Card;
@@ -30,12 +29,10 @@ public class MutateEffect extends SpellAbilityEffect {
         // The token has the characteristics of the spell that became that token.
         // The token is not “created” for the purposes of any replacement effects or triggered abilities that refer to creating a token.
         if (host.isCopiedSpell()) {
-            host.setCopiedSpell(false);
-            host.setToken(true);
+            host.setGamePieceType(GamePieceType.TOKEN);
         }
 
-        final List<GameObject> targets = getDefinedOrTargeted(sa, "Defined");
-        final Card target = (Card)targets.get(0);
+        final Card target = getDefinedCardsOrTargeted(sa, "Defined").get(0);
 
         CardCollectionView view = CardCollection.getView(Lists.newArrayList(host, target));
         final Card topCard = host.getController().getController().chooseSingleEntityForEffect(
@@ -68,7 +65,7 @@ public class MutateEffect extends SpellAbilityEffect {
         // First remove current mutated states
         target.removeMutatedStates();
         // Now add all abilities from bottom cards
-        final Long ts = game.getNextTimestamp();
+        final long ts = game.getNextTimestamp();
         target.setMutatedTimestamp(ts);
 
         target.addCloneState(CardFactory.getMutatedCloneStates(target, sa), ts);
@@ -83,7 +80,7 @@ public class MutateEffect extends SpellAbilityEffect {
         game.getTriggerHandler().clearActiveTriggers(target, null);
         game.getTriggerHandler().registerActiveTrigger(target, false);
 
-        game.getAction().moveTo(p.getZone(ZoneType.Merged), host, sa);
+        game.getAction().moveTo(p.getZone(ZoneType.Merged), host, sa, AbilityKey.newMap());
 
         host.setTapped(target.isTapped());
         host.setFlipped(target.isFlipped());

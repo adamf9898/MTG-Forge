@@ -35,7 +35,7 @@ public enum CounterEnumType {
 
     LOYALTY("LOYAL", 198, 198, 198),
 
-    ACORN("ACORN", 139,69,19),
+    ACORN("ACORN", 139, 69, 19),
 
     AEGIS("AEGIS", 207, 207, 207),
 
@@ -50,14 +50,22 @@ public enum CounterEnumType {
     AWAKENING("AWAKE", 0, 231, 79),
 
     BLAZE("BLAZE", 255, 124, 82),
-    
+
     BLESSING("BLESS", 251, 0, 94),
+
+    BLIGHT("BLGHT", 130, 115, 160),
 
     BLOOD("BLOOD", 255, 108, 111),
 
     BLOODLINE("BLDLN", 224, 44, 44),
 
+    BLOODSTAIN("BLDST", 224, 44, 44),
+
+    BORE("BORE", 98, 47, 34),
+
     BOUNTY("BOUNT", 255, 158, 0),
+
+    BRAIN("BRAIN", 197, 62, 212),
 
     BRIBERY("BRIBE", 172, 201, 235),
 
@@ -71,7 +79,9 @@ public enum CounterEnumType {
 
     CHARGE("CHARG", 246, 192, 0),
 
-    COIN("COIN",255,215,0),
+    CHORUS("CHRUS", 0, 192, 246),
+
+    COIN("COIN", 255, 215, 0),
 
     COLLECTION("CLLCT", 255, 215, 0),
 
@@ -106,12 +116,18 @@ public enum CounterEnumType {
     DESPAIR("DESPR", 238, 186, 187),
 
     DEVOTION("DEVOT", 255, 111, 255),
+   
+    DISCOVERY("DISCO", 12, 230, 100),
 
     DIVINITY("DVNTY", 0, 233, 255),
 
     DOOM("DOOM", 255, 104, 118),
+    
+    DREAD ("DREAD", 205, 170, 240),
 
     DREAM("DREAM", 190, 189, 255),
+    
+    DUTY("DUTY", 232, 245, 245),
 
     ECHO("ECHO", 225, 180, 255),
 
@@ -119,15 +135,19 @@ public enum CounterEnumType {
 
     ELIXIR("ELIXR", 81, 221, 175),
 
+    EMBER("EMBER", 247, 52, 43),
+    
     EON("EON", 23, 194, 255),
 
-    EMBER("EMBER", 247, 52, 43),
+    ERUPTION("ERUPTION", 255, 124, 124),
     
     EXPOSURE("EXPOSURE", 50, 180, 30),
 
     EYEBALL("EYE", 184, 202, 201),
 
     EYESTALK("EYES", 184, 202, 201),
+
+    EVERYTHING("EVRY", 255, 255, 255),
 
     FADE("FADE", 159, 209, 192),
 
@@ -139,13 +159,15 @@ public enum CounterEnumType {
 
     FILIBUSTER("FLBTR", 255, 179, 119),
 
+    FINALITY("FINAL", 255, 255, 255),
+
     FLAME("FLAME", 255, 143, 43),
     
     FLAVOR("FLAVOR", 208, 152, 97), ///adventure only
 
     FLOOD("FLOOD", 0, 203, 255),
 
-    FORESHADOW("FRSHD",144,99, 207),
+    FORESHADOW("FRSHD", 144, 99, 207),
 
     FUNGUS("FNGUS", 121, 219, 151),
 
@@ -190,9 +212,13 @@ public enum CounterEnumType {
     HUSK("HUSK", 227, 212, 173),
 
     ICE("ICE", 0, 239, 255),
+    
+    IMPOSTOR("IMPO", 173, 194, 255),
 
     INCARNATION("INCRN", 247, 206, 64),
 
+    INGREDIENT("INGRD", 180, 50, 145),
+    
     INFECTION("INFCT", 0, 230, 66),
     
     INFLUENCE("INFL", 201, 99, 212),
@@ -221,6 +247,8 @@ public enum CounterEnumType {
 
     LEVEL("LEVEL", 60, 222, 185),
 
+    LOOT("LOOT", 255, 215, 0),
+
     LORE("LORE", 209, 198, 161),
 
     LUCK("LUCK", 185, 174, 255),
@@ -247,6 +275,10 @@ public enum CounterEnumType {
 
     MATRIX("MATRX", 183, 174, 255),
 
+    MEMORY("MEMRY", 174, 183, 255),
+    
+    MIDWAY("MDWAY", 84, 101, 207),
+
     MINE("MINE", 255, 100, 127),
 
     MINING("MINNG", 184, 201, 207),
@@ -260,6 +292,8 @@ public enum CounterEnumType {
     NECRODERMIS("NECRO", 80, 209, 250),
 
     NET("NET", 0, 221, 251),
+
+    NEST("NEST", 80, 80, 50),
 
     OIL("OIL", 99, 102, 106),
 
@@ -293,6 +327,8 @@ public enum CounterEnumType {
 
     POLYP("POLYP", 236, 185, 198),
 
+    POSSESSION("POSSN", 60, 65, 85),
+
     PREY("PREY", 240, 0, 0),
 
     PUPA("PUPA", 0, 223, 203),
@@ -311,9 +347,15 @@ public enum CounterEnumType {
 
     QUEST("QUEST", 251, 189, 0),
 
+    RELEASE("RELEASE", 200, 210, 50),
+
     REPRIEVE("REPR", 240, 120, 50),
 
     REJECTION("REJECT", 212, 235, 242),
+
+    REV("REV", 255, 108, 111),
+    
+    REVIVAL("REVIVL", 130, 230, 50),
     
     RIBBON("RIBBON", 233, 245, 232),
 
@@ -365,6 +407,10 @@ public enum CounterEnumType {
 
     STUN("STUN", 226, 192, 165),
 
+    SUPPLY("SPPLY", 70, 105, 60),
+
+    TAKEOVER("TKVR", 63, 49, 191),
+
     TASK("TASK", 191, 63, 49),
 
     THEFT("THEFT", 255, 176, 125),
@@ -382,6 +428,8 @@ public enum CounterEnumType {
     TREASURE("TRSUR", 255, 184, 0),
 
     UNITY("UNITY", 242, 156, 255),
+
+    UNLOCK("UNLCK", 222, 146, 205),
 
     VALOR("VALOR", 252, 250, 222),
 
@@ -411,6 +459,8 @@ public enum CounterEnumType {
 
     POISON("POISN"),
 
+    RAD("RAD"),
+
     TICKET("TICKET"),
 
     // Keyword Counters
@@ -419,6 +469,7 @@ public enum CounterEnumType {
     FIRSTSTRIKE("First Strike"),
     DOUBLESTRIKE("Double Strike"),
     DEATHTOUCH("Deathtouch"),
+    HASTE("Haste"),
     HEXPROOF("Hexproof"),
     INDESTRUCTIBLE("Indestructible"),
     LIFELINK("Lifelink"),
@@ -427,6 +478,7 @@ public enum CounterEnumType {
     TRAMPLE("Trample"),
     VIGILANCE("Vigilance")
     SHADOW("Shadow")
+    EXALTED("Exalted")
 //*/
     ;
 

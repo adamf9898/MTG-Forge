@@ -1,32 +1,34 @@
 package forge.game.player;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import com.google.common.collect.Iterables;
-
+import com.google.common.collect.Lists;
 import forge.game.CardTraitBase;
 import forge.game.Game;
 import forge.game.ability.AbilityUtils;
 import forge.game.card.Card;
 import forge.game.card.CardCollectionView;
 import forge.game.card.CardLists;
+import forge.game.card.CardPredicates;
 import forge.game.zone.ZoneType;
 import forge.util.Expressions;
 import forge.util.TextUtil;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PlayerProperty {
 
     public static boolean playerHasProperty(Player player, String property, Player sourceController, Card source, CardTraitBase spellAbility) {
         Game game = player.getGame();
-        if (property.endsWith("Activator")) {
-            sourceController = spellAbility.getHostCard().getController();
-            property = property.substring(0, property.length() - 9);
-        }
-        if (property.equals("You")) {
+        if (property.equals("Activator")) {
+            if (!player.equals(spellAbility.getHostCard().getController())) {
+                return false;
+            }
+        } else if (property.equals("You")) {
             if (!player.equals(sourceController)) {
                 return false;
             }
@@ -71,20 +73,18 @@ public class PlayerProperty {
             if (player.equals(sourceController)) {
                 return false;
             }
-        } else if (property.equals("OtherThanSourceOwner")) {
-            if (player.equals(source.getOwner())) {
-                return false;
-            }
         } else if (property.equals("CardOwner")) {
             if (!player.equals(source.getOwner())) {
                 return false;
             }
-        } else if (property.equals("isMonarch")) {
-            if (!player.isMonarch()) {
+        } else if (property.equals("descended")) {
+            if (player.getDescended() < 1) {
                 return false;
             }
-        } else if (property.equals("isNotMonarch")) {
-            if (player.isMonarch()) {
+        } else if (property.equals("committedCrimeThisTurn")) {
+            if (player.getCommittedCrimeThisTurn() < 1) return false;
+        } else if (property.equals("isMonarch")) {
+            if (!player.isMonarch()) {
                 return false;
             }
         } else if (property.equals("hasInitiative")) {
@@ -104,12 +104,13 @@ public class PlayerProperty {
             }
         } else if (property.startsWith("wasDealtCombatDamageThisCombatBy ")) {
             String v = property.split(" ")[1];
-            boolean found = true;
+            boolean found = false;
 
             final List<Card> cards = AbilityUtils.getDefinedCards(source, v, spellAbility);
             for (final Card card : cards) {
                 if (card.getDamageHistory().getThisCombatDamaged().contains(player)) {
                     found = true;
+                    break;
                 }
             }
             if (!found) {
@@ -117,12 +118,13 @@ public class PlayerProperty {
             }
         } else if (property.startsWith("wasDealtDamageThisGameBy ")) {
             String v = property.split(" ")[1];
-            boolean found = true;
+            boolean found = false;
 
             final List<Card> cards = AbilityUtils.getDefinedCards(source, v, spellAbility);
             for (final Card card : cards) {
                 if (card.getDamageHistory().getThisGameDamaged().contains(player)) {
                     found = true;
+                    break;
                 }
             }
             if (!found) {
@@ -165,20 +167,30 @@ public class PlayerProperty {
             if (!source.getDamageHistory().hasAttackedThisTurn(player)) {
                 return false;
             }
+        } else if (property.equals("Attacking")) {
+            if (game.getCombat() == null || !player.equals(game.getCombat().getAttackingPlayer())) {
+                return false;
+            }
         } else if (property.equals("Defending")) {
             if (game.getCombat() == null || !game.getCombat().getAttackersAndDefenders().values().contains(player)) {
                 return false;
             }
-        } else if (property.equals("LostLifeThisTurn")) {
-            if (player.getLifeLostThisTurn() <= 0) {
+        } else if (property.startsWith("LostLifeThisTurn")) {
+            String comparator = "GE";
+            int value = 1;
+
+            if (!property.equals("LostLifeThisTurn")) {
+                // Parse value from "LostLifeThisTurn GE3"
+                String compareAndValue = property.split(" ")[1];
+                comparator = compareAndValue.substring(0, 2); // This should typically be GE
+                final String rightString = compareAndValue.substring(2);
+                value = AbilityUtils.calculateAmount(source, rightString, spellAbility);
+            }
+            if (!Expressions.compare(player.getLifeLostThisTurn(), comparator, value)) {
                 return false;
             }
         } else if (property.equals("TappedLandForManaThisTurn")) {
             if (!player.hasTappedLandForManaThisTurn()) {
-                return false;
-            }
-        } else if (property.equals("NoCardsInHandAtBeginningOfTurn")) {
-            if (player.getNumCardsInHandStartedThisTurnWith() > 0) {
                 return false;
             }
         } else if (property.equals("CardsInHandAtBeginningOfTurn")) {
@@ -231,19 +243,19 @@ public class PlayerProperty {
             if (!player.isEnchantedBy(source)) {
                 return false;
             }
-        } else if (property.equals("NotEnchantedBy")) {
-            if (player.isEnchantedBy(source)) {
-                return false;
-            }
         } else if (property.equals("EnchantedController")) {
             Card enchanting = source.getEnchantingCard();
-            if (enchanting != null && !player.equals(enchanting.getController())) {
+            if (enchanting == null || !player.equals(enchanting.getController())) {
                 return false;
             }
         } else if (property.equals("Chosen")) {
             if (source.getChosenPlayer() == null || !source.getChosenPlayer().equals(player)) {
                 return false;
             }
+        } else if (property.equals("NotedDefender")) {
+            String tracker = player.getDraftNotes().getOrDefault("Cogwork Tracker", "");
+
+            return Iterables.contains(Arrays.asList(tracker.split(",")), String.valueOf(player));
         } else if (property.startsWith("life")) {
             int life = player.getLife();
             int amount = AbilityUtils.calculateAmount(source, property.substring(6), spellAbility);
@@ -430,19 +442,32 @@ public class PlayerProperty {
             if (!Iterables.contains(player.getAttackedPlayersMyTurn(), sourceController)) {
                 return false;
             }
+        } else if (property.startsWith("attackedYouCtrlTheirCurrentTurn")) {
+            CardCollectionView cardsYouCtrl = CardLists.filter(sourceController.getCardsIn(ZoneType.Battlefield),
+                    CardPredicates.isType(property.split("_")[1]));
+            for (Card card : cardsYouCtrl) {
+                if (!player.getCreaturesAttackedThisTurn(card).isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
         } else if (property.equals("attackedYouTheirLastTurn")) {
             if (!player.getAttackedPlayersMyLastTurn().contains(sourceController)) {
                 return false;
             }
         } else if (property.equals("BeenAttackedThisCombat")) {
             for (Player p : game.getRegisteredPlayers()) {
-                if (p.getAttackedPlayersMyCombat().contains(sourceController)) {
+                if (p.getAttackedPlayersMyCombat().contains(player)) {
                     return true;
                 }
             }
             return false;
         } else if (property.equals("VenturedThisTurn")) {
             if (player.getVenturedThisTurn() < 1) {
+                return false;
+            }
+        } else if (property.startsWith("Condition")) {
+            if (AbilityUtils.playerXCount(Lists.newArrayList(player), property, source, spellAbility) == 0) {
                 return false;
             }
         } else if (property.startsWith("NotedFor")) {

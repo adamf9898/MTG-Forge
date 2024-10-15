@@ -1,7 +1,6 @@
 package forge.game;
 
-import com.google.common.collect.Iterables;
-
+import forge.card.CardTypeView;
 import forge.card.ColorSet;
 import forge.card.MagicColor;
 import forge.card.mana.ManaAtom;
@@ -11,18 +10,21 @@ import forge.game.card.Card;
 import forge.game.card.CardState;
 import forge.game.card.CounterEnumType;
 import forge.game.cost.Cost;
+import forge.game.keyword.Keyword;
 import forge.game.mana.Mana;
 import forge.game.mana.ManaCostBeingPaid;
 import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
-import forge.game.spellability.SpellAbilityPredicates;
 import forge.game.spellability.TargetChoices;
 import forge.game.staticability.StaticAbility;
+import forge.game.staticability.StaticAbilityCastWithFlash;
+import forge.game.staticability.StaticAbilityColorlessDamageSource;
 import forge.game.trigger.Trigger;
 import forge.game.zone.ZoneType;
 import forge.util.Expressions;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -30,69 +32,70 @@ public class ForgeScript {
 
     public static boolean cardStateHasProperty(CardState cardState, String property, Player sourceController,
             Card source, CardTraitBase spellAbility) {
-        final boolean isColorlessSource = cardState.getCard().hasKeyword("Colorless Damage Source", cardState);
-        final ColorSet colors = cardState.getCard().getColor(cardState);
+        boolean withSource = property.endsWith("Source");
+        final ColorSet colors;
+        if (withSource && StaticAbilityColorlessDamageSource.colorlessDamageSource(cardState)) {
+            colors = ColorSet.getNullColor();
+        } else {
+            colors = cardState.getCard().getColor(cardState);
+        }
+
+        final CardTypeView type = cardState.getTypeWithChanges();
         if (property.contains("White") || property.contains("Blue") || property.contains("Black")
                 || property.contains("Red") || property.contains("Green")) {
             boolean mustHave = !property.startsWith("non");
-            boolean withSource = property.endsWith("Source");
-            if (withSource && isColorlessSource) {
-                return false;
-            }
-
             final String colorName = property.substring(mustHave ? 0 : 3, property.length() - (withSource ? 6 : 0));
 
             int desiredColor = MagicColor.fromName(colorName);
             boolean hasColor = colors.hasAnyColor(desiredColor);
             return mustHave == hasColor;
-        } else if (property.contains("Colorless")) { // ... Card is colorless
+        } else if (property.contains("Colorless")) {
             boolean non = property.startsWith("non");
-            boolean withSource = property.endsWith("Source");
-            if (non && withSource && isColorlessSource) {
+            return non != colors.isColorless();
+        } else if (property.startsWith("MultiColor")) {
+            // ... Card is multicolored
+            return colors.isMulticolor();
+        } else if (property.startsWith("EnemyColor")) {
+            if (colors.countColors() != 2) {
                 return false;
             }
-            return non != colors.isColorless();
-        } else if (property.contains("MultiColor")) {
-            // ... Card is multicolored
-            if (property.endsWith("Source") && isColorlessSource)
-                return false;
-            return property.startsWith("non") != colors.isMulticolor();
-        } else if (property.contains("AllColors")) {
-            if (property.endsWith("Source") && isColorlessSource)
-                return false;
-            return property.startsWith("non") != colors.isAllColors();
-        } else if (property.contains("MonoColor")) { // ... Card is monocolored
-            if (property.endsWith("Source") && isColorlessSource)
-                return false;
-            return property.startsWith("non") != colors.isMonoColor();
+            // i want only enemy colors
+            for (final byte pair : Arrays.copyOfRange(MagicColor.COLORPAIR, 5, 10)) {
+                if (colors.hasExactlyColor(pair)) {
+                    return true;
+                }
+            }
+            return false;
+        } else if (property.startsWith("AllColors")) {
+            return colors.isAllColors();
+        } else if (property.startsWith("MonoColor")) {
+            return colors.isMonoColor();
         } else if (property.startsWith("ChosenColor")) {
-            if (property.endsWith("Source") && isColorlessSource)
-                return false;
             return source.hasChosenColor() && colors.hasAnyColor(MagicColor.fromName(source.getChosenColor()));
         } else if (property.startsWith("AnyChosenColor")) {
-            if (property.endsWith("Source") && isColorlessSource)
-                return false;
             return source.hasChosenColor()
                     && colors.hasAnyColor(ColorSet.fromNames(source.getChosenColors()).getColor());
         } else if (property.equals("AssociatedWithChosenColor")) {
             final String color = source.getChosenColor();
             switch (color) {
                 case "white":
-                    return cardState.getTypeWithChanges().getLandTypes().contains("Plains");
+                    return type.hasSubtype("Plains");
                 case "blue":
-                    return cardState.getTypeWithChanges().getLandTypes().contains("Island");
+                    return type.hasSubtype("Island");
                 case "black":
-                    return cardState.getTypeWithChanges().getLandTypes().contains("Swamp");
+                    return type.hasSubtype("Swamp");
                 case "red":
-                    return cardState.getTypeWithChanges().getLandTypes().contains("Mountain");
+                    return type.hasSubtype("Mountain");
                 case "green":
-                    return cardState.getTypeWithChanges().getLandTypes().contains("Forest");
+                    return type.hasSubtype("Forest");
                 default:
                     return false;
             }
+        } else if (property.equals("Outlaw")) {
+            return type.isOutlaw();
         } else if (property.startsWith("non")) {
             // ... Other Card types
-            return !cardState.getTypeWithChanges().hasStringType(property.substring(3));
+            return !type.hasStringType(property.substring(3));
         } else if (property.equals("CostsPhyrexianMana")) {
             return cardState.getManaCost().hasPhyrexian();
         } else if (property.startsWith("HasSVar")) {
@@ -101,30 +104,24 @@ public class ForgeScript {
         } else if (property.equals("ChosenType")) {
             String chosenType = source.getChosenType();
             if (chosenType.startsWith("Non")) {
-                return !cardState.getTypeWithChanges().hasStringType(StringUtils.capitalize(chosenType.substring(3)));
+                return !type.hasStringType(StringUtils.capitalize(chosenType.substring(3)));
             }
-            return cardState.getTypeWithChanges().hasStringType(chosenType);
+            return type.hasStringType(chosenType);
         } else if (property.equals("IsNotChosenType")) {
-            return !cardState.getTypeWithChanges().hasStringType(source.getChosenType());
+            return !type.hasStringType(source.getChosenType());
         } else if (property.equals("ChosenType2")) {
-            return cardState.getTypeWithChanges().hasStringType(source.getChosenType2());
+            return type.hasStringType(source.getChosenType2());
         } else if (property.equals("IsNotChosenType2")) {
-            return !cardState.getTypeWithChanges().hasStringType(source.getChosenType2());
+            return !type.hasStringType(source.getChosenType2());
         } else if (property.equals("NotedType")) {
             boolean found = false;
             for (String s : source.getNotedTypes()) {
-                if (cardState.getTypeWithChanges().hasStringType(s)) {
+                if (type.hasStringType(s)) {
                     found = true;
                     break;
                 }
             }
             return found;
-        } else if (property.startsWith("HasSubtype")) {
-            final String subType = property.substring(11);
-            return cardState.getTypeWithChanges().hasSubtype(subType);
-        } else if (property.startsWith("HasNoSubtype")) {
-            final String subType = property.substring(13);
-            return !cardState.getTypeWithChanges().hasSubtype(subType);
         } else if (property.equals("hasActivatedAbilityWithTapCost")) {
             for (final SpellAbility sa : cardState.getSpellAbilities()) {
                 if (sa.isActivatedAbility() && sa.getPayCosts().hasTapCost()) {
@@ -147,7 +144,7 @@ public class ForgeScript {
             }
             return false;
         } else if (property.equals("hasManaAbility")) {
-            if (Iterables.any(cardState.getSpellAbilities(), SpellAbilityPredicates.isManaAbility())) {
+            if (!cardState.getManaAbilities().isEmpty()) {
                 return true;
             }
             for (final Trigger trig : cardState.getTriggers()) {
@@ -175,7 +172,7 @@ public class ForgeScript {
             int x = AbilityUtils.calculateAmount(source, rhs, spellAbility);
 
             return Expressions.compare(y, property, x);
-        } else return cardState.getTypeWithChanges().hasStringType(property);
+        } else return type.hasStringType(property);
     }
 
     public static boolean spellAbilityHasProperty(SpellAbility sa, String property, Player sourceController,
@@ -194,33 +191,51 @@ public class ForgeScript {
             Cost cost = sa.getPayCosts();
             return cost != null && cost.hasTapCost();
         } else if (property.equals("Bargain")) {
-            return sa.isBargain();
+            return sa.isBargained();
         } else if (property.equals("Backup")) {
             return sa.isBackup();
+        } else if (property.equals("Bestow")) {
+            return sa.isBestow();
         } else if (property.equals("Blitz")) {
             return sa.isBlitz();
         } else if (property.equals("Buyback")) {
-            return sa.isBuyBackAbility();
+            return sa.isBuyback();
+        } else if (property.equals("Craft")) {
+            return sa.isCraft();
+        } else if (property.equals("Crew")) {
+            return sa.isCrew();
         } else if (property.equals("Cycling")) {
             return sa.isCycling();
         } else if (property.equals("Dash")) {
             return sa.isDash();
+        } else if (property.equals("Disturb")) {
+            return sa.isDisturb();
+        } else if (property.equals("Embalm")) {
+            return sa.isEmbalm();
+        } else if (property.equals("Eternalize")) {
+            return sa.isEternalize();
         } else if (property.equals("Flashback")) {
-            return sa.isFlashBackAbility();
+            return sa.isFlashback();
         } else if (property.equals("Jumpstart")) {
             return sa.isJumpstart();
         } else if (property.equals("Kicked")) {
             return sa.isKicked();
         } else if (property.equals("Loyalty")) {
             return sa.isPwAbility();
-        } else if (property.equals("nonLoyalty")) {
-            return !sa.isPwAbility();
         } else if (property.equals("Aftermath")) {
             return sa.isAftermath();
         } else if (property.equals("MorphUp")) {
             return sa.isMorphUp();
+        } else if (property.equals("ManifestUp")) {
+            return sa.isManifestUp();
+        } else if (property.equals("Unlock")) {
+            return sa.isUnlock();
+        } else if (property.equals("isTurnFaceUp")) {
+            return sa.isTurnFaceUp();
+        } else if (property.equals("isCastFaceDown")) {
+            return sa.isCastFaceDown();
         } else if (property.equals("Modular")) {
-            return sa.hasParam("Modular");
+            return sa.isKeyword(Keyword.MODULAR);
         } else if (property.equals("Equip")) {
             return sa.isEquip();
         } else if (property.equals("Boast")) {
@@ -233,14 +248,22 @@ public class ForgeScript {
             return sa.isForetelling();
         } else if (property.equals("Foretold")) {
             return sa.isForetold();
+        } else if (property.equals("Plotting")) {
+            return sa.isPlotting();
+        } else if (property.equals("Outlast")) {
+            return sa.isOutlast();
+        } else if (property.equals("Modal")) {
+            return sa.getApi() == ApiType.Charm;
         } else if (property.equals("ClassLevelUp")) {
             return sa.getApi() == ApiType.ClassLevelUp;
         } else if (property.equals("Daybound")) {
-            return sa.hasParam("Daybound");
+            return sa.isKeyword(Keyword.DAYBOUND);
         } else if (property.equals("Nightbound")) {
-            return sa.hasParam("Nightbound");
-        } else if (property.equals("paidPhyrexianMana")) {
-            return sa.getSpendPhyrexianMana() > 0;
+            return sa.isKeyword(Keyword.NIGHTBOUND);
+        } else if (property.equals("Ward")) {
+            return sa.isKeyword(Keyword.WARD);
+        } else if (property.equals("CumulativeUpkeep")) {
+            return sa.isCumulativeUpkeep();
         } else if (property.equals("ChapterNotLore")) {
             if (!sa.isChapter()) {
                 return false;
@@ -250,6 +273,8 @@ public class ForgeScript {
             }
         } else if (property.equals("LastChapter")) {
             return sa.isLastChapter();
+        } else if (property.equals("paidPhyrexianMana")) {
+            return sa.getSpendPhyrexianMana() > 0;
         } else if (property.startsWith("ManaSpent")) {
             String[] k = property.split(" ", 2);
             String comparator = k[1].substring(0, 2);
@@ -305,9 +330,10 @@ public class ForgeScript {
             return Expressions.compare(targets.size(), comparator, y);
         } else if (property.startsWith("IsTargeting")) {
             String[] k = property.split(" ", 2);
+            String unescaped = k[1].replace("~", "+");
             boolean found = false;
-            for (GameObject o : AbilityUtils.getDefinedObjects(source, k[1], spellAbility)) {
-                if (sa.isTargeting(o)) {
+            for (GameObject o : AbilityUtils.getDefinedObjects(source, unescaped, spellAbility)) {
+                if (sa.getRootAbility().isTargeting(o)) {
                     found = true;
                     break;
                 }
@@ -348,6 +374,43 @@ public class ForgeScript {
             if (sa.isManaAbilityFor(paidFor, colorCanUse)) {
                 return false;
             }
+        } else if(property.equals("NamedSpell")) {
+            boolean found = false;
+            for (String name : source.getNamedCards()) {
+                if (sa.cardState.getName().equals(name)) {
+                    found = true;
+                    break;
+                }
+            }
+            return found;
+        } else if (property.equals("otherAbility")) {
+            if (sa.equals(spellAbility)) {
+                return false;
+            }
+            if (spellAbility instanceof SpellAbility) {
+                SpellAbility sourceSpell = (SpellAbility) spellAbility;
+                if (sa.getRootAbility().equals(sourceSpell.getRootAbility())) {
+                    return false;
+                }
+            }
+        } else if (property.equals("CouldCastTiming")) {
+            Card host = sa.getHostCard();
+            Game game = host.getGame();
+            if (game.getStack().isSplitSecondOnStack()) {
+                return false;
+            }
+            // Adapted from SpellAbility.canCastTiming, to determine if the SA could be cast at the current timing (assuming the controller had priority).
+
+            if (sourceController.canCastSorcery() || sa.getRestrictions().isInstantSpeed()) {
+                return true;
+            }
+            if (sa.isSpell()) {
+                return host.isInstant() || host.hasKeyword(Keyword.FLASH) || StaticAbilityCastWithFlash.anyWithFlash(sa, host, sourceController);
+            }
+            if (sa.isActivatedAbility()) {
+                return !sa.isPwAbility() && !sa.getRestrictions().isSorcerySpeed();
+            }
+            return true;
         } else if (sa.getHostCard() != null) {
             return sa.getHostCard().hasProperty(property, sourceController, source, spellAbility);
         }

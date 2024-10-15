@@ -45,11 +45,7 @@ import forge.game.player.Player;
 import forge.game.spellability.SpellAbility;
 import forge.game.zone.Zone;
 import forge.game.zone.ZoneType;
-import forge.util.CardTranslation;
-import forge.util.Expressions;
-import forge.util.FileSection;
-import forge.util.Lang;
-import forge.util.TextUtil;
+import forge.util.*;
 
 /**
  * The Class StaticAbility.
@@ -66,6 +62,7 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
     private int mayPlayTurn = 0;
 
     private SpellAbility payingTrigSA;
+    private StaticAbilityView view = null;
 
     @Override
     public final int getId() {
@@ -117,7 +114,7 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
      *
      * @return the applicable layers.
      */
-    private final Set<StaticAbilityLayer> generateLayer() {
+    private Set<StaticAbilityLayer> generateLayer() {
         if (!checkMode("Continuous")) {
             return EnumSet.noneOf(StaticAbilityLayer.class);
         }
@@ -145,15 +142,13 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
             layers.add(StaticAbilityLayer.COLOR);
         }
 
-        if (hasParam("RemoveAllAbilities") || hasParam("GainsAbilitiesOf") || hasParam("GainsAbilitiesOfDefined")) {
-            layers.add(StaticAbilityLayer.ABILITIES);
-        }
-
-        if (hasParam("AddKeyword") || hasParam("AddAbility")
-                || hasParam("AddTrigger") || hasParam("RemoveTriggers")
-                || hasParam("RemoveKeyword") || hasParam("AddReplacementEffects")
+        if (hasParam("RemoveAllAbilities") || hasParam("GainsAbilitiesOf")
+                || hasParam("GainsAbilitiesOfDefined") || hasParam("GainsTriggerAbsOf")
+                || hasParam("AddKeyword") || hasParam("AddAbility")
+                || hasParam("AddTrigger") || hasParam("AddReplacementEffect")
                 || hasParam("AddStaticAbility") || hasParam("AddSVar")
-                || hasParam("CantHaveKeyword") || hasParam("ShareRememberedKeywords")) {
+                || hasParam("CantHaveKeyword") || hasParam("ShareRememberedKeywords")
+                || hasParam("RemoveKeyword")) {
             layers.add(StaticAbilityLayer.ABILITIES);
         }
 
@@ -167,7 +162,8 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
 
         if (hasParam("AddHiddenKeyword") || hasParam("MayPlay")
                 || hasParam("IgnoreEffectCost") || hasParam("Goad") || hasParam("CanBlockAny") || hasParam("CanBlockAmount")
-                || hasParam("AdjustLandPlays") || hasParam("ControlVote") || hasParam("AdditionalVote") || hasParam("AdditionalOptionalVote")) {
+                || hasParam("AdjustLandPlays") || hasParam("ControlVote") || hasParam("AdditionalVote") || hasParam("AdditionalOptionalVote")
+                || hasParam("DeclaresAttackers") || hasParam("DeclaresBlockers")) {
             layers.add(StaticAbilityLayer.RULES);
         }
 
@@ -188,18 +184,11 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
     @Override
     public final String toString() {
         if (hasParam("Description") && !this.isSuppressed()) {
-            String currentName;
-            if (this.isIntrinsic() && cardState != null && cardState.getCard() == getHostCard()) {
-                currentName = cardState.getName();
-            } else {
-                currentName = getHostCard().getName();
-            }
-            String desc = CardTranslation.translateSingleDescriptionText(getParam("Description"), currentName);
-            desc = TextUtil.fastReplace(desc, "CARDNAME", CardTranslation.getTranslatedName(currentName));
-            desc = TextUtil.fastReplace(desc, "NICKNAME",
-                    Lang.getInstance().getNickName(CardTranslation.getTranslatedName(currentName)));
-            desc = TextUtil.fastReplace(desc, "INSERT",
-                    Integer.toString(AbilityUtils.calculateAmount(getHostCard(), getParam("Insert"), this)));
+            ITranslatable nameSource = getHostName(this);
+            String desc = CardTranslation.translateSingleDescriptionText(getParam("Description"), nameSource);
+            String translatedName = CardTranslation.getTranslatedName(nameSource);
+            desc = TextUtil.fastReplace(desc, "CARDNAME", translatedName);
+            desc = TextUtil.fastReplace(desc, "NICKNAME", Lang.getInstance().getNickName(translatedName));
 
             return desc;
         } else {
@@ -241,6 +230,16 @@ public class StaticAbility extends CardTraitBase implements IIdentifiable, Clone
         this.layers = this.generateLayer();
         this.hostCard = host;
         this.setCardState(state);
+    }
+
+    public StaticAbilityView getView() {
+        if (view == null)
+            view = new StaticAbilityView(this);
+        else {
+            view.updateHostCard(this);
+            view.updateDescription(this);
+        }
+        return view;
     }
 
     public final CardCollectionView applyContinuousAbilityBefore(final StaticAbilityLayer layer, final CardCollectionView preList) {

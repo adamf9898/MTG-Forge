@@ -11,6 +11,7 @@ import forge.ImageKeys;
 import forge.assets.*;
 import forge.item.PaperCard;
 import forge.util.ImageUtil;
+import forge.util.TextBounds;
 import org.apache.commons.lang3.StringUtils;
 
 import com.badlogic.gdx.graphics.Color;
@@ -108,7 +109,7 @@ public class CardImageRenderer {
         if (isFaceDown && altState && card.isSplitCard())
             state = card.getLeftSplitState();
         boolean isSaga = state.getType().hasSubtype("Saga");
-        boolean isClass = state.getType().hasSubtype("Class");
+        boolean isClass = state.getType().hasSubtype("Class") || state.getType().hasSubtype("Case");
         boolean isDungeon = state.getType().isDungeon();
         boolean drawDungeon = isDungeon && CardRenderer.getCardArt(card) != null;
 
@@ -276,7 +277,7 @@ public class CardImageRenderer {
         if (!noText && state != null) {
             //draw mana cost for card
             ManaCost mainManaCost = state.getManaCost();
-            if (card.isSplitCard() && card.getAlternateState() != null) {
+            if (card.isSplitCard() && card.getAlternateState() != null && !card.isFaceDown() && card.getZone() != ZoneType.Stack && card.getZone() != ZoneType.Battlefield) {
                 //handle rendering both parts of split card
                 mainManaCost = card.getLeftSplitState().getManaCost();
                 ManaCost otherManaCost = card.getRightSplitState().getManaCost();
@@ -325,12 +326,12 @@ public class CardImageRenderer {
 
     private static void drawArt(CardView cv, Graphics g, float x, float y, float w, float h, boolean altState, boolean isFaceDown) {
         boolean isSaga = cv.getCurrentState().getType().hasSubtype("Saga");
-        boolean isClass = cv.getCurrentState().getType().hasSubtype("Class");
+        boolean isClass = cv.getCurrentState().getType().hasSubtype("Class") || cv.getCurrentState().getType().hasSubtype("Case");
         boolean isDungeon = cv.getCurrentState().getType().isDungeon();
         ColorSet colorSet = cv.getCurrentState().getColors();
         if (altState && cv.hasAlternateState()) {
             isSaga = cv.getAlternateState().getType().hasSubtype("Saga");
-            isClass = cv.getAlternateState().getType().hasSubtype("Class");
+            isClass = cv.getAlternateState().getType().hasSubtype("Class") || cv.getAlternateState().getType().hasSubtype("Case");
             isDungeon = cv.getAlternateState().getType().isDungeon();
             colorSet = cv.getAlternateState().getColors();
         }
@@ -376,7 +377,8 @@ public class CardImageRenderer {
                                 altArt = CardRenderer.getAlternateCardArt(cv.getAlternateState().getImageKey(), cv.getAlternateState().isPlaneswalker());
                             else {
                                 altArt = CardRenderer.getCardArt(cv.getAlternateState().getImageKey(), cv.isSplitCard(), cv.getAlternateState().isPlane() || cv.getAlternateState().isPhenomenon(), cv.getText().contains("Aftermath"),
-                                        cv.getAlternateState().getType().hasSubtype("Saga"), cv.getAlternateState().getType().hasSubtype("Class"), cv.getAlternateState().getType().isDungeon(), cv.isFlipCard(), cv.getAlternateState().isPlaneswalker(), CardRenderer.isModernFrame(cv), cv.getAlternateState().getType().isBattle());
+                                        cv.getAlternateState().getType().hasSubtype("Saga"), cv.getAlternateState().getType().hasSubtype("Class") || cv.getAlternateState().getType().hasSubtype("Case"), cv.getAlternateState().getType().isDungeon(),
+                                        cv.isFlipCard(), cv.getAlternateState().isPlaneswalker(), CardRenderer.isModernFrame(cv), cv.getAlternateState().getType().isBattle());
                             }
                         }
                     }
@@ -668,12 +670,13 @@ public class CardImageRenderer {
                     CardView cv = card.getBackup();
                     if (cv == null || isFaceDown)
                         cv = card;
-                    text = cv.getText(cv.getState(true), needTranslation ? CardTranslation.getTranslationTexts(cv.getName(), "") : null);
+                    CardStateView csv = cv.getState(true);
+                    text = cv.getText(csv, needTranslation ? CardTranslation.getTranslationTexts(csv) : null);
 
                 } else {
                     text = !card.isSplitCard() ?
-                            card.getText(state, needTranslation ? state == null ? null : CardTranslation.getTranslationTexts(state.getName(), "") : null) :
-                            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(card.getLeftSplitState().getName(), card.getRightSplitState().getName()) : null);
+                            card.getText(state, needTranslation ? state == null ? null : CardTranslation.getTranslationTexts(state) : null) :
+                            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(card.getLeftSplitState(), card.getRightSplitState()) : null);
                 }
             } else {
                 if (noText)
@@ -682,12 +685,13 @@ public class CardImageRenderer {
                     CardView cv = card.getBackup();
                     if (cv == null || isFaceDown)
                         cv = card;
-                    text = cv.getText(cv.getState(false), needTranslation ? CardTranslation.getTranslationTexts(cv.getName(), "") : null);
+                    CardStateView csv = cv.getState(false);
+                    text = cv.getText(csv, needTranslation ? CardTranslation.getTranslationTexts(csv) : null);
 
                 } else {
                     text = !card.isSplitCard() ?
-                            card.getText(state, needTranslation ? state == null ? null : CardTranslation.getTranslationTexts(state.getName(), "") : null) :
-                            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(card.getLeftSplitState().getName(), card.getRightSplitState().getName()) : null);
+                            card.getText(state, needTranslation ? state == null ? null : CardTranslation.getTranslationTexts(state) : null) :
+                            card.getText(state, needTranslation ? CardTranslation.getTranslationTexts(card.getLeftSplitState(), card.getRightSplitState()) : null);
                 }
             }
             if (StringUtils.isEmpty(text)) {
@@ -941,7 +945,7 @@ public class CardImageRenderer {
     }
 
     public static Color[] drawCardBackgroundTexture(CardStateView state, Graphics g, List<DetailColors> backColors, float x, float y, float w, float h) {
-        boolean isHybrid = state.getManaCost().hasHybrid();
+        boolean isHybrid = state.getManaCost().hasMultiColor();
         boolean isPW = state.isPlaneswalker();
         boolean isNyx = state.isNyx();
         Color[] colors = new Color[backColors.size()];
@@ -1108,7 +1112,7 @@ public class CardImageRenderer {
         float manaCostWidth = 0;
         if (canShow) {
             ManaCost mainManaCost = state.getManaCost();
-            if (card.isSplitCard() && card.hasAlternateState() && !card.isFaceDown() && card.getZone() != ZoneType.Stack) { //only display current state's mana cost when on stack
+            if (card.isSplitCard() && card.hasAlternateState() && !card.isFaceDown() && card.getZone() != ZoneType.Stack && card.getZone() != ZoneType.Battlefield) { //only display current state's mana cost when on stack
                 //handle rendering both parts of split card
                 mainManaCost = card.getLeftSplitState().getManaCost();
                 ManaCost otherManaCost = card.getAlternateState().getManaCost();
@@ -1172,14 +1176,15 @@ public class CardImageRenderer {
             return;
         }
 
+        TextBounds bounds = cardTextRenderer.getBounds(ptText, PT_FONT);
         float padding = PT_FONT.getCapHeight() / 2;
-        float boxWidth = Math.min(PT_FONT.getBounds(ptText).width + 2 * padding,
+        float boxWidth = Math.min(bounds.width + 2 * padding,
                 w - idWidth - padding); //prevent box overlapping ID
         x += w - boxWidth;
         w = boxWidth;
 
         fillColorBackground(g, colors, x, y, w, h);
         g.drawRect(BORDER_THICKNESS, Color.BLACK, x, y, w, h);
-        g.drawText(ptText, PT_FONT, Color.BLACK, x, y, w, h, false, Align.center, true);
+        cardTextRenderer.drawText(g, ptText, PT_FONT, Color.BLACK, x, y, w, h, y, h, false, Align.center, true);
     }
 }

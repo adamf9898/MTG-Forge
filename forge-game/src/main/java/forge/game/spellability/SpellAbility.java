@@ -20,6 +20,7 @@ package forge.game.spellability;
 import java.util.*;
 
 import forge.game.cost.CostSacrifice;
+import forge.util.*;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -31,7 +32,6 @@ import forge.card.CardStateName;
 import forge.card.ColorSet;
 import forge.card.MagicColor;
 import forge.card.mana.ManaAtom;
-import forge.card.mana.ManaCost;
 import forge.game.CardTraitBase;
 import forge.game.ForgeScript;
 import forge.game.Game;
@@ -50,13 +50,13 @@ import forge.game.card.CardCollectionView;
 import forge.game.card.CardDamageMap;
 import forge.game.card.CardFactory;
 import forge.game.card.CardPlayOption;
-import forge.game.card.CardPredicates;
 import forge.game.card.CardZoneTable;
 import forge.game.cost.Cost;
 import forge.game.cost.CostPart;
 import forge.game.cost.CostTap;
 import forge.game.event.GameEventCardStatsChanged;
 import forge.game.keyword.Keyword;
+import forge.game.keyword.KeywordInterface;
 import forge.game.mana.Mana;
 import forge.game.mana.ManaCostBeingPaid;
 import forge.game.phase.Untap;
@@ -69,11 +69,6 @@ import forge.game.staticability.StaticAbilityMustTarget;
 import forge.game.trigger.Trigger;
 import forge.game.trigger.TriggerType;
 import forge.game.zone.ZoneType;
-import forge.util.Aggregates;
-import forge.util.CardTranslation;
-import forge.util.Lang;
-import forge.util.Localizer;
-import forge.util.TextUtil;
 
 //only SpellAbility can go on the stack
 //override any methods as needed
@@ -103,11 +98,12 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     // choices for constructor isPermanent argument
     private String originalDescription = "", description = "";
     private String originalStackDescription = "", stackDescription = "";
-    private ManaCost multiKickerManaCost;
+
     private Player activatingPlayer;
     private Player targetingPlayer;
-    private Card playEffectCard;
+    private Player choosingPlayer;
     private Pair<Long, Player> controlledByPlayer;
+
     private ManaCostBeingPaid manaCostBeingPaid;
     private int spentPhyrexian = 0;
     private int paidLifeAmount = 0;
@@ -125,12 +121,10 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     private List<Object> triggerRemembered = Lists.newArrayList();
 
     private AlternativeCost altCost = null;
+    private EnumSet<OptionalCost> optionalCosts = EnumSet.noneOf(OptionalCost.class);
+    private Table<Keyword, Pair<Long, Long>, Integer> optionalKeywordAmount = HashBasedTable.create();
 
     private boolean aftermath = false;
-
-    private boolean blessing = false;
-    private Integer chapter = null;
-    private boolean lastChapter = false;
 
     /** The pay costs. */
     private Cost payCosts;
@@ -150,7 +144,6 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     private TreeBasedTable<String, Boolean, CardCollection> paidLists = TreeBasedTable.create();
 
     private EnumMap<AbilityKey, Object> triggeringObjects = AbilityKey.newMap();
-
     private EnumMap<AbilityKey, Object> replacingObjects = AbilityKey.newMap();
 
     private final List<String> pipsToReduce = new ArrayList<>();
@@ -167,7 +160,8 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     private boolean isCopied = false;
     private boolean mayChooseNewTargets = false;
 
-    private EnumSet<OptionalCost> optionalCosts = EnumSet.noneOf(OptionalCost.class);
+    private boolean isCastFromPlayEffect = false;
+
     private TargetRestrictions targetRestrictions;
     private TargetChoices targetChosen = new TargetChoices();
 
@@ -263,6 +257,23 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
 
         view.updateHostCard(this);
         view.updateDescription(this); //description can change if host card does
+    }
+
+    @Override
+    public void setKeyword(final KeywordInterface kw) {
+        super.setKeyword(kw);
+
+        if (subAbility != null) {
+            subAbility.setKeyword(kw);
+        }
+        for (SpellAbility sa : additionalAbilities.values()) {
+            sa.setKeyword(kw);
+        }
+        for (List<AbilitySub> list : additionalAbilityLists.values()) {
+            for (AbilitySub sa : list) {
+                sa.setKeyword(kw);
+            }
+        }
     }
 
     public boolean canThisProduce(final String s) {
@@ -439,13 +450,6 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     // all Spell's and Abilities must override this method
     public abstract void resolve();
 
-    public ManaCost getMultiKickerManaCost() {
-        return multiKickerManaCost;
-    }
-    public void setMultiKickerManaCost(final ManaCost cost) {
-        multiKickerManaCost = cost;
-    }
-
     public Player getActivatingPlayer() {
         return activatingPlayer;
     }
@@ -484,6 +488,13 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         targetingPlayer = targetingPlayer0;
     }
 
+    public Player getChoosingPlayer() {
+        return choosingPlayer;
+    }
+    public void setChoosingPlayer(Player choosingPlayer0) {
+        choosingPlayer = choosingPlayer0;
+    }
+
     /**
      * @return returns who controls the controller of this sa when it is resolving (for Word of Command effect). Null means not being controlled by other
      */
@@ -512,9 +523,17 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     public boolean isSpell() { return false; }
     public boolean isAbility() { return true; }
     public boolean isActivatedAbility() { return false; }
+    public boolean isLandAbility() { return false; }
+
+    public boolean isTurnFaceUp() {
+        return isMorphUp() || isDisguiseUp() || isManifestUp() || isCloakUp();
+    }
 
     public boolean isMorphUp() {
         return this.hasParam("MorphUp");
+    }
+    public boolean isDisguiseUp() {
+        return this.hasParam("DisguiseUp");
     }
 
     public boolean isCastFaceDown() {
@@ -524,13 +543,20 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     public boolean isManifestUp() {
         return hasParam("ManifestUp");
     }
+    public boolean isCloakUp() {
+        return hasParam("CloakUp");
+    }
+
+    public boolean isUnlock() {
+        return hasParam("Unlock");
+    }
 
     public boolean isCycling() {
-        return isAlternativeCost(AlternativeCost.Cycling);
+        return isKeyword(Keyword.CYCLING) || isKeyword(Keyword.TYPECYCLING);
     }
 
     public boolean isBackup() {
-        return this.hasParam("Backup");
+        return this.isKeyword(Keyword.BACKUP);
     }
 
     public boolean isBoast() {
@@ -538,10 +564,10 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public boolean isNinjutsu() {
-        return this.hasParam("Ninjutsu");
+        return this.isKeyword(Keyword.NINJUTSU);
     }
 
-    public boolean isCumulativeupkeep() {
+    public boolean isCumulativeUpkeep() {
         return hasParam("CumulativeUpkeep");
     }
 
@@ -557,7 +583,6 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     public ApiType getApi() {
         return api;
     }
-
     public void setApi(ApiType apiType) {
         api = apiType;
     }
@@ -679,7 +704,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
                         mana.getSourceCard().getController(), mana.getSourceCard(), null)) {
                     final long timestamp = host.getGame().getNextTimestamp();
                     final List<String> kws = Arrays.asList(mana.getAddedKeywords().split(" & "));
-                    host.addChangedCardKeywords(kws, null, false, timestamp, 0);
+                    host.addChangedCardKeywords(kws, null, false, timestamp, null);
                     if (mana.addsKeywordsUntil()) {
                         final GameCommand untilEOT = new GameCommand() {
                             private static final long serialVersionUID = -8285169579025607693L;
@@ -748,22 +773,22 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         // Thus, to protect the original's set from changes, we make a copy right here.
         optionalCosts = EnumSet.copyOf(optionalCosts);
         optionalCosts.add(cost);
-        if (!cost.getPip().equals("")) {
+        if (!cost.getPip().isEmpty()) {
             pipsToReduce.add(cost.getPip());
         }
     }
 
-    public boolean isBargain() {
+    public boolean isBargained() {
         return isOptionalCostPaid(OptionalCost.Bargain);
     }
 
-    public boolean isBuyBackAbility() {
+    public boolean isBuyback() {
         return isOptionalCostPaid(OptionalCost.Buyback);
     }
 
     public boolean isKicked() {
         return isOptionalCostPaid(OptionalCost.Kicker1) || isOptionalCostPaid(OptionalCost.Kicker2) ||
-            getHostCard().getKickerMagnitude() > 0;
+            getRootAbility().getOptionalKeywordAmount(Keyword.MULTIKICKER) > 0;
     }
 
     public boolean isEntwine() {
@@ -793,9 +818,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public void setTriggeringObjectsFrom(final Map<AbilityKey, Object> runParams, final AbilityKey... types) {
-        int typesLength = types.length;
-        for (int i = 0; i < typesLength; i += 1) {
-            AbilityKey type = types[i];
+        for (AbilityKey type : types) {
             if (runParams.containsKey(type)) {
                 triggeringObjects.put(type, runParams.get(type));
             }
@@ -830,10 +853,11 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     public void setReplacingObject(final AbilityKey type, final Object o) {
         replacingObjects.put(type, o);
     }
+    public void setReplacingObjects(final Map<AbilityKey, Object> repParams) {
+        replacingObjects = AbilityKey.newMap(repParams);
+    }
     public void setReplacingObjectsFrom(final Map<AbilityKey, Object> repParams, final AbilityKey... types) {
-        int typesLength = types.length;
-        for (int i = 0; i < typesLength; i += 1) {
-            AbilityKey type = types[i];
+        for (AbilityKey type : types) {
             if (repParams.containsKey(type)) {
                 setReplacingObject(type, repParams.get(type));
             }
@@ -900,36 +924,38 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     public String getCostDescription() {
         if (payCosts == null || (this instanceof AbilitySub)) { // SubAbilities don't have Costs or Cost
             return "";
-        } else {
-            StringBuilder sb = new StringBuilder();
-            // descriptors
-            if (hasParam("PrecostDesc")) {
-                sb.append(getParam("PrecostDesc")).append(" ");
-            }
-            if (hasParam("CostDesc")) {
-                sb.append(getParam("CostDesc")).append(" ");
-            } else {
-                if (hasParam("AlternateCost")) {
-                    Cost alternateCost = new Cost(getParam("AlternateCost"), payCosts.isAbility());
-                    boolean altOnlyMana = alternateCost.isOnlyManaCost();
-                    if (payCosts.isOnlyManaCost() && !altOnlyMana) {
-                        sb.append("Pay ");
-                    }
-                    sb.append(payCosts.toString());
-                    sb.append(" or ").append(altOnlyMana ? alternateCost.toString() :
-                            StringUtils.uncapitalize(alternateCost.toString()));
-                    sb.append(isEquip() && !altOnlyMana ? "." : "");
-                } else {
-                    sb.append(payCosts.toString());
-                }
-
-                if (payCosts.isAbility() && !isEquip()) {
-                    sb.append(": ");
-                }
-            }
-
-            return sb.toString();
         }
+
+        boolean equip = false;
+        StringBuilder sb = new StringBuilder();
+        // descriptors
+        if (hasParam("PrecostDesc")) {
+            equip = getParam("PrecostDesc").startsWith("Equip");
+            sb.append(getParam("PrecostDesc")).append(" ");
+        }
+        if (hasParam("CostDesc")) {
+            sb.append(getParam("CostDesc")).append(" ");
+        } else {
+            if (hasParam("AlternateCost")) {
+                Cost alternateCost = new Cost(getParam("AlternateCost"), payCosts.isAbility());
+                boolean altOnlyMana = alternateCost.isOnlyManaCost();
+                if (payCosts.isOnlyManaCost() && !altOnlyMana) {
+                    sb.append("Pay ");
+                }
+                sb.append(payCosts.toString());
+                sb.append(" or ").append(altOnlyMana ? alternateCost.toString() :
+                    StringUtils.uncapitalize(alternateCost.toString()));
+                sb.append(equip && !altOnlyMana ? "." : "");
+            } else {
+                sb.append(payCosts.toString());
+            }
+
+            if (payCosts.isAbility() && !equip) {
+                sb.append(": ");
+            }
+        }
+
+        return sb.toString();
     }
 
     public void rebuiltDescription() {
@@ -961,16 +987,11 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
             String desc = node.getDescription();
             if (node.getHostCard() != null) {
-                String currentName;
-                // if alternate state is viewed while card uses original
-                if (node.isIntrinsic() && node.cardState != null && node.cardState.getCard() == node.getHostCard()) {
-                    currentName = node.cardState.getName();
-                } else {
-                    currentName = node.getHostCard().getName();
-                }
-                desc = CardTranslation.translateMultipleDescriptionText(desc, currentName);
-                desc = TextUtil.fastReplace(desc, "CARDNAME", CardTranslation.getTranslatedName(currentName));
-                desc = TextUtil.fastReplace(desc, "NICKNAME", Lang.getInstance().getNickName(CardTranslation.getTranslatedName(currentName)));
+                ITranslatable nameSource = getHostName(node);
+                desc = CardTranslation.translateMultipleDescriptionText(desc, nameSource);
+                String translatedName = CardTranslation.getTranslatedName(nameSource);
+                desc = TextUtil.fastReplace(desc, "CARDNAME", translatedName);
+                desc = TextUtil.fastReplace(desc, "NICKNAME", Lang.getInstance().getNickName(translatedName));
                 if (node.getOriginalHost() != null) {
                     desc = TextUtil.fastReplace(desc, "ORIGINALHOST", node.getOriginalHost().getName());
                 }
@@ -1051,13 +1072,13 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public boolean isBasicSpell() {
-        return basicSpell && this.altCost == null && getRootAbility().optionalCosts.isEmpty();
+        return basicSpell && !isCastFaceDown() && this.altCost == null && getRootAbility().optionalCosts.isEmpty();
     }
     public void setBasicSpell(final boolean basicSpell0) {
         basicSpell = basicSpell0;
     }
 
-    public boolean isFlashBackAbility() {
+    public boolean isFlashback() {
         return this.isAlternativeCost(AlternativeCost.Flashback);
     }
 
@@ -1068,6 +1089,10 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         return this.isAlternativeCost(AlternativeCost.Foretold);
     }
 
+    public boolean isPlotting() {
+        return false;
+    }
+    
     /**
      * @return the aftermath
      */
@@ -1083,37 +1108,32 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public boolean isOutlast() {
-        return isAlternativeCost(AlternativeCost.Outlast);
+        return isKeyword(Keyword.OUTLAST);
     }
 
+    public boolean isCraft() {
+        return isKeyword(Keyword.CRAFT);
+    }
+    public boolean isCrew() {
+        return isKeyword(Keyword.CREW);
+    }
     public boolean isEquip() {
-        return hasParam("Equip");
-    }
-
-    public boolean isBlessing() {
-        return blessing;
-    }
-    public void setBlessing(boolean blessing0) {
-        blessing = blessing0;
+        return isKeyword(Keyword.EQUIP);
     }
 
     public boolean isChapter() {
-        return chapter != null;
+        return isTrigger() && getTrigger().isChapter();
     }
 
     public Integer getChapter() {
-        return chapter;
-    }
-
-    public void setChapter(int val) {
-        chapter = val;
+        if (!isTrigger()) {
+            return null;
+        }
+        return getTrigger().getChapter();
     }
 
     public boolean isLastChapter() {
-        return lastChapter;
-    }
-    public boolean setLastChapter(boolean value) {
-        return lastChapter = value;
+        return isTrigger() && getTrigger().isLastChapter();
     }
 
     public CardPlayOption getMayPlayOption() {
@@ -1140,6 +1160,9 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         return copy(host, this.getActivatingPlayer(), lki);
     }
     public SpellAbility copy(Card host, Player activ, final boolean lki) {
+        return copy(host, activ, lki, false);
+    }
+    public SpellAbility copy(Card host, Player activ, final boolean lki, final boolean keepTextChanges) {
         SpellAbility clone = null;
         try {
             clone = (SpellAbility) clone();
@@ -1148,7 +1171,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
 
             // don't use setHostCard to not trigger the not copied parts yet
 
-            copyHelper(clone, host);
+            copyHelper(clone, host, lki || keepTextChanges);
 
             // always set this to false, it is only set in CopyEffect
             clone.mayChooseNewTargets = false;
@@ -1159,6 +1182,8 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             if (manaPart != null) {
                 clone.manaPart = new AbilityManaPart(clone, mapParams);
             }
+
+            clone.optionalKeywordAmount = HashBasedTable.create(optionalKeywordAmount);
 
             // need to copy the damage tables
             if (damageMap != null) {
@@ -1178,9 +1203,6 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             clone.paidAbilities = Lists.newArrayList();
             clone.setPaidHash(getPaidHash());
 
-            // copy last chapter flag for Trigger
-            clone.lastChapter = this.lastChapter;
-
             if (usesTargeting()) {
                 // the targets need to be cloned, otherwise they might be cleared
                 clone.targetChosen = getTargets().clone();
@@ -1190,7 +1212,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             clone.additionalAbilities = Maps.newHashMap();
             clone.additionalAbilityLists = Maps.newHashMap();
             // run special copy Ability to make a deep copy
-            CardFactory.copySpellAbility(this, clone, host, activ, lki);
+            CardFactory.copySpellAbility(this, clone, host, activ, lki, keepTextChanges);
         } catch (final CloneNotSupportedException e) {
             System.err.println(e);
         }
@@ -1206,6 +1228,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             return null; // the ability was not copyable, e.g. a Suspend SA may get here
         }
         newSA.setPayCosts(newSA.getPayCosts().copyWithNoMana());
+        // currently needed by AI
         if (!newSA.hasParam("WithoutManaCost")) {
             newSA.mapParams.put("WithoutManaCost", "True");
         }
@@ -1284,6 +1307,9 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     }
 
     public final boolean canTarget(final GameObject entity) {
+        return canTarget(entity, false);
+    }
+    public final boolean canTarget(final GameObject entity, boolean fizzleCheck) {
         if (entity == null) {
             return false;
         }
@@ -1375,7 +1401,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
 
             if (hasParam("MaxTotalTargetCMC") && entity instanceof Card) {
-                int soFar = Aggregates.sum(getTargets().getTargetCards(), CardPredicates.Accessors.fnGetCmc);
+                int soFar = Aggregates.sum(getTargets().getTargetCards(), Card::getCMC);
                 // only add if it isn't already targeting
                 if (!isTargeting(entity)) {
                     final Card c = (Card) entity;
@@ -1388,7 +1414,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
 
             if (hasParam("MaxTotalTargetPower") && entity instanceof Card) {
-                int soFar = Aggregates.sum(getTargets().getTargetCards(), CardPredicates.Accessors.fnGetNetPower);
+                int soFar = Aggregates.sum(getTargets().getTargetCards(), Card::getNetPower);
                 // only add if it isn't already targeting
                 if (!isTargeting(entity)) {
                     final Card c = (Card) entity;
@@ -1400,26 +1426,40 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
                 }
             }
 
+            if (tr.isEqualToughness() && entity instanceof Card) {
+                for (final Card c : getTargets().getTargetCards()) {
+                    if (entity != c && c.getNetToughness() != (((Card) entity).getNetToughness())) {
+                        return false;
+                    }
+                }
+            }
+
             if (tr.isSameController() && entity instanceof Card) {
                 Player newController;
                 newController = ((Card) entity).getController();
-                for (final Card c : targetChosen.getTargetCards()) {
+                for (final Card c : getTargets().getTargetCards()) {
                     if (entity != c && !c.getController().equals(newController))
                         return false;
                 }
             }
 
-            if (tr.isDifferentControllers() && entity instanceof Card) {
-                Player newController;
-                newController = ((Card) entity).getController();
-                for (final Card c : targetChosen.getTargetCards()) {
+            if ((tr.isDifferentControllers() || (tr.isForEachPlayer() && !fizzleCheck)) && entity instanceof Card) {
+                Player newController = ((Card) entity).getController();
+                for (Card c : getTargets().getTargetCards()) {
+                    // can still determine controller only to check whether the other creature is a legal target
+                    c = getHostCard().getGame().getChangeZoneLKIInfo(c);
                     if (entity != c && c.getController().equals(newController))
                         return false;
                 }
             }
 
+            if (tr.isForEachPlayer() && fizzleCheck && entity instanceof Card) {
+                if (getTargets().forEachControllerChanged((Card) entity))
+                    return false;
+            }
+
             if (tr.isWithoutSameCreatureType() && entity instanceof Card) {
-                for (final Card c : targetChosen.getTargetCards()) {
+                for (final Card c : getTargets().getTargetCards()) {
                     if (entity != c && c.sharesCreatureTypeWith((Card) entity)) {
                         return false;
                     }
@@ -1427,7 +1467,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
 
             if (tr.isWithSameCreatureType() && entity instanceof Card) {
-                for (final Card c : targetChosen.getTargetCards()) {
+                for (final Card c : getTargets().getTargetCards()) {
                     if (entity != c && !c.sharesCreatureTypeWith((Card) entity)) {
                         return false;
                     }
@@ -1435,7 +1475,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
 
             if (tr.isWithSameCardType() && entity instanceof Card) {
-                for (final Card c : targetChosen.getTargetCards()) {
+                for (final Card c : getTargets().getTargetCards()) {
                     if (entity != c && !c.sharesCardTypeWith((Card) entity)) {
                         return false;
                     }
@@ -1491,6 +1531,14 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
 
     public final boolean isEvoke() {
         return isAlternativeCost(AlternativeCost.Evoke);
+    }
+
+    public final boolean isFreerunning() {
+        return isAlternativeCost(AlternativeCost.Freerunning);
+    }
+
+    public final boolean isImpending() {
+        return isAlternativeCost(AlternativeCost.Impending);
     }
 
     public final boolean isMadness() {
@@ -1611,12 +1659,20 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
     public boolean undo() {
         if (isUndoable() && getActivatingPlayer().getManaPool().accountFor(getManaPart())) {
             payCosts.refundPaidCost(hostCard);
+            return true;
         }
         return false;
     }
 
     public void setUndoable(boolean b) {
         undoable = b;
+    }
+
+    public boolean isCastFromPlayEffect() {
+        return isCastFromPlayEffect;
+    }
+    public void setCastFromPlayEffect(boolean b) {
+        isCastFromPlayEffect = b;
     }
 
     public boolean isCopied() {
@@ -1846,13 +1902,6 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         setStackDescription(getHostCard().getName() + " - targeting " + card);
     }
 
-    public void setPlayEffectCard(final Card card) {
-        playEffectCard = card;
-    }
-    public Card getPlayEffectCard() {
-        return playEffectCard;
-    }
-
     /**
      * <p>
      * findTargetCards.
@@ -2007,7 +2056,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         if (getTargets().contains(o)) {
             return true;
         }
-        SpellAbility p = getParent();
+        SpellAbility p = getSubAbility();
         return p != null && p.isTargeting(o);
     }
 
@@ -2131,7 +2180,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             }
         }
         else if (incR[0].contains("LandAbility")) {
-            if (!(root instanceof LandAbility)) {
+            if (!(root.isLandAbility())) {
                 return testFailed;
             }
         }
@@ -2145,8 +2194,8 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         if (incR.length > 1) {
             final String excR = incR[1];
             final String[] exR = excR.split("\\+"); // Exclusive Restrictions are ...
-            for (int j = 0; j < exR.length; j++) {
-                if (!hasProperty(exR[j], sourceController, source, spellAbility)) {
+            for (String s : exR) {
+                if (!hasProperty(s, sourceController, source, spellAbility)) {
                     return testFailed;
                 }
             }
@@ -2490,7 +2539,7 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
         if (getRestrictions().isInstantSpeed()) {
             return true;
         }
-        if (isSpell() && (hasSVar("IsCastFromPlayEffect") || host.isInstant() || host.hasKeyword(Keyword.FLASH))) {
+        if ((isSpell() || this.isLandAbility()) && (isCastFromPlayEffect() || host.isInstant() || host.hasKeyword(Keyword.FLASH))) {
             return true;
         }
 
@@ -2529,5 +2578,39 @@ public abstract class SpellAbility extends CardTraitBase implements ISpellAbilit
             return false;
         }
         return true;
+    }
+
+    public boolean isCounterableBy(SpellAbility sa) {
+        return true;
+    }
+
+    public Card getAlternateHost(Card source) {
+        return null;
+    }
+
+    public boolean hasOptionalKeywordAmount(KeywordInterface kw) {
+        long staticId = kw.getStatic() == null ? 0 : kw.getStatic().getId();
+        return this.optionalKeywordAmount.contains(kw.getKeyword(), Pair.of(kw.getIdx(), staticId));
+    }
+    public boolean hasOptionalKeywordAmount(Keyword kw) {
+        return this.optionalKeywordAmount.containsRow(kw);
+    }
+    public Set<Keyword> getOptionalKeywords() {
+        return this.optionalKeywordAmount.rowKeySet();
+    }
+
+    public int getOptionalKeywordAmount(KeywordInterface kw) {
+        long staticId = kw.getStatic() == null ? 0 : kw.getStatic().getId();
+        return ObjectUtils.firstNonNull(this.optionalKeywordAmount.get(kw.getKeyword(), Pair.of(kw.getIdx(), staticId)), 0);
+    }
+    public int getOptionalKeywordAmount(Keyword kw) {
+        return this.optionalKeywordAmount.row(kw).values().stream().mapToInt(i->i).sum();
+    }
+    public void setOptionalKeywordAmount(KeywordInterface kw, int amount) {
+        long staticId = kw.getStatic() == null ? 0 : kw.getStatic().getId();
+        this.optionalKeywordAmount.put(kw.getKeyword(), Pair.of(kw.getIdx(), staticId), amount);
+    }
+    public void clearOptionalKeywordAmount() {
+        optionalKeywordAmount.clear();
     }
 }

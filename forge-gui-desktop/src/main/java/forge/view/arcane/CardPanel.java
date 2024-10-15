@@ -479,12 +479,15 @@ public class CardPanel extends SkinnedPanel implements CardContainer, IDisposabl
 
     private void displayIconOverlay(final Graphics g, final boolean canShow) {
         if (canShow && showCardManaCostOverlay() && cardWidth < 200) {
-            final boolean showSplitMana = card.isSplitCard();
+            final boolean showSplitMana = card.isSplitCard() && card.getZone() != ZoneType.Battlefield;
             if (!showSplitMana) {
                 drawManaCost(g, card.getCurrentState().getManaCost(), 0);
             } else {
                 if (!card.isFaceDown()) { // no need to draw mana symbols on face down split cards (e.g. manifested)
-                    PaperCard pc = StaticData.instance().getCommonCards().getCard(card.getName());
+                    PaperCard pc = null;
+                    if (!card.getName().isEmpty()) {
+                        pc = StaticData.instance().getCommonCards().getCard(card.getName());
+                    }
                     int ofs = pc != null && Card.getCardForUi(pc).hasKeyword(Keyword.AFTERMATH) ? -12 : 12;
 
                     drawManaCost(g, card.getLeftSplitState().getManaCost(), ofs);
@@ -573,6 +576,14 @@ public class CardPanel extends SkinnedPanel implements CardContainer, IDisposabl
                 }
                 else if (card.getCurrentState().hasFirstStrike()) {
                     CardFaceSymbols.drawAbilitySymbol("firststrike", g, abiX, abiY, abiScale, abiScale);
+                    abiY += abiSpace;
+                }
+                if (card.getCurrentState().hasAnnihilator()) {
+                    CardFaceSymbols.drawAbilitySymbol("annihilator", g, abiX, abiY, abiScale, abiScale);
+                    abiY += abiSpace;
+                }
+                if (card.getCurrentState().hasExalted()) {
+                    CardFaceSymbols.drawAbilitySymbol("exalted", g, abiX, abiY, abiScale, abiScale);
                     abiY += abiSpace;
                 }
                 if (card.getCurrentState().hasDeathtouch()) {
@@ -664,6 +675,14 @@ public class CardPanel extends SkinnedPanel implements CardContainer, IDisposabl
                     CardFaceSymbols.drawAbilitySymbol("lifelink", g, abiX, abiY, abiScale, abiScale);
                     abiY += abiSpace;
                 }
+                if (card.getCurrentState().hasWard()) {
+                    CardFaceSymbols.drawAbilitySymbol("ward", g, abiX, abiY, abiScale, abiScale);
+                    abiY += abiSpace;
+                }
+                if (card.getCurrentState().hasWither()) {
+                    CardFaceSymbols.drawAbilitySymbol("wither", g, abiX, abiY, abiScale, abiScale);
+                    abiY += abiSpace;
+                }
                 if (card.getCurrentState().hasDefender()) {
                     CardFaceSymbols.drawAbilitySymbol("defender", g, abiX, abiY, abiScale, abiScale);
                     abiY += abiSpace;
@@ -746,10 +765,10 @@ public class CardPanel extends SkinnedPanel implements CardContainer, IDisposabl
             } else {
                 String keywordKey = card.getCurrentState().getKeywordKey();
                 String abilityText = card.getCurrentState().getAbilityText();
-                if (((keywordKey.indexOf("Flashback") == -1)
-                    && (keywordKey.indexOf("Flash") != -1))
-                        || ((abilityText.indexOf("May be played by") != -1)
-                                && (abilityText.indexOf("and as though it has flash") != -1))) {
+                if (((!keywordKey.contains("Flashback"))
+                    && (keywordKey.contains("Flash")))
+                        || ((abilityText.contains("May be played by"))
+                                && (abilityText.contains("and as though it has flash")))) {
                         hasFlash = !card.isFaceDown() && ((!ZoneType.Library.equals(card.getZone()) && !ZoneType.Hand.equals(card.getZone())) || matchUI.mayView(card));
                         if (hasFlash) {
                             CardFaceSymbols.drawAbilitySymbol("flash", g, cardXOffset + (cardWidth / 2) + (cardWidth / 3), cardWidth < 200 ? cardYOffset + 25 : cardYOffset + 50, cardWidth / 7, cardWidth / 7);

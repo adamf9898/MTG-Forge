@@ -7,6 +7,21 @@ ScryfallCode=SPG
 
 [cards]
 1 R Lord of Atlantis @Syd Mills
+2 U Malcolm, Keen-Eyed Navigator @Julie Dillon
+3 R Bridge from Below @Yeong-Hao Han
+4 R Mephidross Vampire @Samuel Araya
+5 U Pitiless Plunderer @Johan Grenier
+6 U Breeches, Brazen Plunderer @Filip Burburan
+7 U Dargo, the Shipwrecker @Kai Carpenter
+8 R Rampaging Ferocidon @Dan Murayama Scott
+9 R Underworld Breach @Piotr Dura
+10 M Carnage Tyrant @Monztre
+11 R Ghalta, Primal Hunger @Joshua Raphael
+12 M Polyraptor @Yeong-Hao Han
+13 M Kalamax, the Stormsire @Sam Burley
+14 M Lord Windgrace @April Prime
+15 M Mirri, Weatherlight Duelist @Michele Giorgi
+16 R Thrasios, Triton Hero @Caroline Gariba
 17 M Mana Crypt @Dominik Mayer
 17a M Mana Crypt @Dominik Mayer
 17b M Mana Crypt @Dominik Mayer
@@ -14,3 +29,59 @@ ScryfallCode=SPG
 17d M Mana Crypt @Dominik Mayer
 17e M Mana Crypt @Dominik Mayer
 17f M Mana Crypt @Dominik Mayer
+18 U Star Compass @Alix Branwyn
+19 M Ghostly Prison @Volkan Baǵa
+20 M Fabricate @Fajareka Setiawan
+21 M Show and Tell @Donato Giancola
+22 M Tragic Slip @Scott M. Fischer
+23 M Victimize @Kekai Kotaki
+24 M Gamble @Jason A. Engle
+25 M Crashing Footfalls @Uriah Voth
+26 M Tireless Tracker @Donato Giancola
+27 M Drown in the Loch @Chris Seaman
+28 M Field of the Dead @Ralph Horsley
+29 M Stoneforge Mystic @Livia Prima
+30 M Brazen Borrower @Jesper Ejsing
+31 M Desertion @Donato Giancola
+32 M Morbid Opportunist @Chris Seaman
+33 M Port Razer @Zoltan Boros
+34 M Scapeshift @Joseph Meehan
+35 M Mystic Snake @Svetlin Velinov
+36 M Notion Thief @Alix Branwyn
+37 M Desert @Lucas Graciano
+38 M Prismatic Vista @Sam Burley
+39 M Thought-Knot Seer @Antonio José Manzanedo
+40 M Prismatic Ending @Dominik Mayer
+41 M Dismember @Martin de Diego Sádaba
+42 M Persist @Jarel Threat
+43 M Expressive Iteration @Kai Carpenter
+44 M Solitude @Campbell White
+45 M Subtlety @Campbell White
+46 M Grief @Campbell White
+47 M Fury @Campbell White
+48 M Endurance @Campbell White
+49 M Solitude @Campbell White
+50 M Subtlety @Campbell White
+51 M Grief @Campbell White
+52 M Fury @Campbell White
+53 M Endurance @Campbell White
+54 M Swords to Plowshares @Izzy
+55 M Ledger Shredder @Volkan Baǵa
+56 M Rat Colony @Mark Zug
+57 M Relentless Rats @Mathias Kollros
+58 M Kindred Charge @Milivoj Ćeran
+59 M Sylvan Tutor @Scott M. Fischer
+60 M Toski, Bearer of Secrets @Lucas Graciano
+61 M Frogmite @Mike Sass
+62 M Sword of Fire and Ice @Volkan Baǵa
+63 M Secluded Courtyard @Dan Murayama Scott
+64 M Hallowed Haunting @Mila Pesic
+65 M Soul Warden @Joshua Cairos
+66 M Expropriate @Borja Pindado
+67 M Phantasmal Image @Darren Tan
+68 M Damnation @Masahiro Ito
+69 M Sacrifice @David Palumbo
+70 M Maddening Hex @Javier Charro
+71 M Unholy Heat @Josh Hass
+72 M Collected Company @Borja Pindado
+73 M Noxious Revival @Javier Charro

@@ -5,7 +5,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.google.common.base.Function;
 import com.google.common.collect.Lists;
 
 import forge.GuiDesktop;
@@ -29,7 +28,6 @@ import forge.game.zone.ZoneType;
 import forge.gui.GuiBase;
 import forge.item.IPaperCard;
 import forge.item.PaperToken;
-import forge.localinstance.properties.ForgePreferences;
 import forge.localinstance.properties.ForgePreferences.FPref;
 import forge.model.FModel;
 
@@ -48,6 +46,7 @@ public class SimulationTest {
         Match match = new Match(rules, players, "Test");
         Game game = new Game(players, rules, match);
         game.setAge(GameStage.Play);
+        game.EXPERIMENTAL_RESTORE_SNAPSHOT = false;
 
         return game;
     }
@@ -55,13 +54,10 @@ public class SimulationTest {
     protected Game initAndCreateGame() {
         if (!initialized) {
             GuiBase.setInterface(new GuiDesktop());
-            FModel.initialize(null, new Function<ForgePreferences, Void>() {
-                @Override
-                public Void apply(ForgePreferences preferences) {
-                    preferences.setPref(FPref.LOAD_CARD_SCRIPTS_LAZILY, false);
-                    preferences.setPref(FPref.UI_LANGUAGE, "en-US");
-                    return null;
-                }
+            FModel.initialize(null, preferences -> {
+                preferences.setPref(FPref.LOAD_CARD_SCRIPTS_LAZILY, false);
+                preferences.setPref(FPref.UI_LANGUAGE, "en-US");
+                return null;
             });
             initialized = true;
         }
@@ -136,7 +132,7 @@ public class SimulationTest {
     protected Card addCardToZone(String name, Player p, ZoneType zone) {
         Card c = createCard(name, p);
         // card need a new Timestamp otherwise Static Abilities might collide
-        c.setTimestamp(p.getGame().getNextTimestamp());
+        c.setGameTimestamp(p.getGame().getNextTimestamp());
         p.getZone(zone).add(c);
         return c;
     }
@@ -175,7 +171,7 @@ public class SimulationTest {
     protected Card addToken(String name, Player p) {
         Card c = createToken(name, p);
         // card need a new Timestamp otherwise Static Abilities might collide
-        c.setTimestamp(p.getGame().getNextTimestamp());
+        c.setGameTimestamp(p.getGame().getNextTimestamp());
         p.getZone(ZoneType.Battlefield).add(c);
         return c;
     }

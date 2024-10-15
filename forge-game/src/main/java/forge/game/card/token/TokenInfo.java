@@ -3,6 +3,7 @@ package forge.game.card.token;
 import java.util.List;
 import java.util.Map;
 
+import forge.card.GamePieceType;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 
@@ -104,16 +105,20 @@ public class TokenInfo {
         if (c.getType().isLegendary()) {
             relevantTypes.add("Legendary");
         }
-        return relevantTypes.toArray(new String[relevantTypes.size()]);
+        return relevantTypes.toArray(new String[0]);
     }
 
     private Card toCard(Game game) {
-        final Card c = new Card(game.nextCardId(), game);
+        return toCard(game, game.nextCardId());
+    }
+
+    private Card toCard(Game game, int id) {
+        final Card c = new Card(id, game);
         c.setName(name);
         c.setImageKey(ImageKeys.getTokenKey(imageName));
 
         c.setColor(color.isEmpty() ? manaCost : color);
-        c.setToken(true);
+        c.setGamePieceType(GamePieceType.TOKEN);
 
         for (final String t : types) {
             c.addType(t);
@@ -139,11 +144,15 @@ public class TokenInfo {
     }
 
     public Card makeOneToken(final Player controller) {
+        return makeOneToken(controller, controller.getGame().nextCardId());
+    }
+
+    public Card makeOneToken(final Player controller, int id) {
         final Game game = controller.getGame();
-        final Card c = toCard(game);
+        final Card c = toCard(game, id);
 
         c.setOwner(controller);
-        c.setToken(true);
+        c.setGamePieceType(GamePieceType.TOKEN);
         CardFactoryUtil.setupKeywordedAbilities(c);
         // add them later to prevent setupKeywords from adding them multiple times
         for (final String kw : intrinsicKeywords) {
